@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Global Development Hex Cartogram — Group 10</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<!-- Monaco Editor (live code editor) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',system-ui,sans-serif;background:#0f1117;color:#e0e0e8;min-height:100vh;overflow-x:hidden}
+
+/* ── HEADER ── */
+.header{padding:18px 28px 8px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px}
+.header h1{font-size:19px;font-weight:600;color:#fff;letter-spacing:-.3px}
+.subtitle{font-size:11px;color:#555;margin-top:3px}
+
+/* ── TOP BAR ── */
+.top-bar{padding:7px 28px;display:flex;gap:7px;flex-wrap:wrap;align-items:center;border-bottom:1px solid #1a1d28}
+.btn{padding:5px 12px;border:1px solid #2a2d3a;border-radius:6px;background:#1a1d28;color:#999;font-size:11px;font-family:inherit;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn:hover{border-color:#4a4d5a;color:#ddd}
+.btn.active{background:#252840;border-color:#5b6abf;color:#c4caff}
+.btn.mode-btn.active{background:#2a1f40;border-color:#8b6abf;color:#d4b4ff}
+.btn.editor-btn.active{background:#1a2a1a;border-color:#4a8b4a;color:#a4e4a4}
+.sep{width:1px;height:18px;background:#222530;margin:0 2px}
+
+/* ── TIME CONTROLS ── */
+.time-bar{padding:7px 28px;display:none;align-items:center;gap:12px;flex-wrap:wrap;background:#0d0f18;border-bottom:1px solid #181a24}
+.time-bar.visible{display:flex}
+.year-display{font-size:21px;font-weight:700;color:#c4caff;min-width:48px;letter-spacing:-1px}
+.year-label{font-size:9px;color:#444;margin-bottom:1px;text-transform:uppercase;letter-spacing:.5px}
+input[type=range].year-slider{flex:1;min-width:100px;max-width:380px;accent-color:#5b6abf;cursor:pointer}
+.play-btn{padding:4px 13px;border-radius:6px;border:1px solid #3a3d60;background:#1e2040;color:#c4caff;font-size:11px;cursor:pointer;transition:all .18s;font-family:inherit}
+.play-btn:hover{background:#252850}
+.ts-note{font-size:9px;color:#383a50;margin-left:4px}
+
+/* ── LEGEND ── */
+.legend-bar{padding:5px 28px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.legend-title{font-size:11px;color:#777;font-weight:500;white-space:nowrap}
+.legend-gradient{height:7px;border-radius:3px;width:180px}
+.legend-labels{display:flex;justify-content:space-between;width:180px;font-size:9px;color:#444;margin-top:1px}
+.legend-note{font-size:9px;color:#3a4060;font-style:italic;margin-left:6px}
+
+/* ── REGION LEGEND ── */
+.region-legend{display:flex;gap:6px;flex-wrap:wrap;padding:3px 28px 7px}
+.region-item{display:flex;align-items:center;gap:4px;font-size:10px;color:#555;cursor:pointer;padding:2px 7px;border-radius:4px;transition:all .18s;user-select:none}
+.region-item:hover{background:#1a1d28;color:#aaa}
+.region-item.active-region{background:#1e2240;color:#c4caff;border:1px solid #3a4070}
+.region-item.dimmed{opacity:.18}
+.region-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+/* ── MAIN LAYOUT ── */
+.main-container{display:grid;grid-template-columns:1fr 280px;gap:0;padding:6px 28px 18px;height:560px}
+@media(max-width:960px){.main-container{grid-template-columns:1fr;height:auto}.detail-panel{margin-left:0;margin-top:8px;height:300px}}
+
+/* ── MAP AREA ── */
+.map-area{position:relative;background:#13151e;border-radius:10px;border:1px solid #1e2030;overflow:hidden}
+.map-area svg{display:block;width:100%;height:100%}
+#canvas3d{display:none;position:absolute;inset:0;width:100%;height:100%;cursor:grab}
+#canvas3d:active{cursor:grabbing}
+.map-area.mode-3d svg{display:none}
+.map-area.mode-3d #canvas3d{display:block}
+.info-3d{position:absolute;bottom:10px;left:12px;font-size:9px;color:#333;pointer-events:none;display:none;line-height:1.6}
+.map-area.mode-3d .info-3d{display:block}
+
+/* ── SVG HEX ELEMENTS ── */
+.hex-path{stroke:#1a1d28;stroke-width:1.5;cursor:pointer;transition:stroke .1s,stroke-width .1s,opacity .25s}
+.hex-path:hover{stroke:#fff;stroke-width:2.5}
+.hex-path.selected{stroke:#ffd700;stroke-width:3}
+.hex-label{font-size:7.5px;font-weight:600;fill:#fff;text-anchor:middle;pointer-events:none;
+  paint-order:stroke;stroke:#000;stroke-width:2.5px;stroke-linejoin:round}
+.hex-label.dark{fill:#111;stroke:#eee;stroke-width:1px}
+
+/* ── TOOLTIP ── */
+.tooltip{position:fixed;pointer-events:none;background:#1c1f2e;border:1px solid #2a2d42;border-radius:10px;
+  padding:12px 14px;font-size:11px;box-shadow:0 8px 32px rgba(0,0,0,.7);z-index:9999;min-width:200px;
+  opacity:0;transition:opacity .1s}
+.tooltip.visible{opacity:1}
+.tt-name{font-size:13px;font-weight:600;color:#fff;margin-bottom:2px}
+.tt-region{font-size:10px;color:#555;margin-bottom:8px}
+.tt-row{display:flex;justify-content:space-between;align-items:center;padding:2px 0}
+.tt-row.tt-active{background:#1a1d2e;margin:1px -4px;padding:2px 4px;border-radius:3px}
+.tt-label{color:#777;font-size:10px}
+.tt-mini{display:flex;align-items:center;gap:5px}
+.tt-value{color:#ddd;font-weight:500;font-size:11px;min-width:32px;text-align:right}
+.tt-bar-bg{width:44px;height:3px;background:#222530;border-radius:1px;overflow:hidden}
+.tt-bar{height:100%;border-radius:1px}
+
+/* ── DETAIL PANEL ── */
+.detail-panel{background:#13151e;border-radius:10px;border:1px solid #1e2030;padding:16px;
+  margin-left:10px;overflow-y:auto;display:flex;flex-direction:column;gap:0}
+.detail-panel h3{font-size:14px;font-weight:600;color:#fff;margin-bottom:2px}
+.dp-region{font-size:10px;color:#444;margin-bottom:12px}
+.dp-row{margin-bottom:11px}
+.dp-ilabel{font-size:10px;color:#666;margin-bottom:3px;display:flex;justify-content:space-between}
+.dp-ilabel span:last-child{color:#bbb;font-weight:500}
+.dp-bar-bg{width:100%;height:6px;background:#1a1d28;border-radius:3px;overflow:hidden}
+.dp-bar{height:100%;border-radius:3px;transition:width .45s ease}
+.rank-badge{display:inline-block;background:#151828;color:#5860a0;padding:1px 7px;border-radius:8px;font-size:9px;font-weight:600;margin-top:2px}
+.detail-empty{color:#383a50;font-size:12px;text-align:center;margin:auto;line-height:2}
+.deselect-btn{float:right;font-size:9px;color:#333;cursor:pointer;padding:2px 6px;border-radius:3px;border:1px solid #1e2030;background:transparent;font-family:inherit;transition:all .15s}
+.deselect-btn:hover{color:#888;border-color:#333}
+.ts-sparkline{margin-top:4px;display:block}
+.why-box{background:#111320;border:1px solid #1a1d30;border-radius:6px;padding:10px 12px;margin-top:10px}
+.why-box h4{font-size:9px;font-weight:600;color:#5860a0;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.why-box p{font-size:10px;color:#444;line-height:1.6}
+
+/* ── MODE BADGE ── */
+.mode-badge{font-size:9px;font-weight:500;background:#181a28;color:#4a50a0;padding:2px 8px;border-radius:8px;margin-left:8px;vertical-align:middle;border:1px solid #252840}
+
+/* ── LIVE EDITOR ── */
+.editor-overlay{display:none;position:fixed;inset:0;background:rgba(8,9,14,.92);z-index:2000;flex-direction:column}
+.editor-overlay.open{display:flex}
+.editor-header{padding:10px 16px;background:#0d0f1a;border-bottom:1px solid #1e2130;display:flex;align-items:center;gap:12px;flex-shrink:0}
+.editor-header h3{font-size:13px;font-weight:600;color:#fff;margin:0}
+.editor-header p{font-size:10px;color:#555;margin:0}
+.editor-body{display:flex;flex:1;overflow:hidden;gap:0}
+.editor-pane{flex:1;min-width:0;display:flex;flex-direction:column}
+.editor-pane-label{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:#444;padding:6px 12px;background:#0a0c14;border-bottom:1px solid #181a28;flex-shrink:0}
+#monaco-container{flex:1;min-height:0}
+.editor-sidebar{width:320px;flex-shrink:0;background:#0a0c14;border-left:1px solid #181a28;display:flex;flex-direction:column;overflow:hidden}
+.editor-sidebar-top{padding:12px;border-bottom:1px solid #181a28}
+.run-btn{width:100%;padding:8px;border-radius:6px;border:1px solid #3a6a3a;background:#1a3a1a;color:#6ad46a;font-size:12px;font-family:inherit;font-weight:600;cursor:pointer;transition:all .18s;margin-bottom:8px}
+.run-btn:hover{background:#1e441e;color:#8af08a}
+.close-editor-btn{width:100%;padding:6px;border-radius:6px;border:1px solid #2a2d3a;background:#1a1d28;color:#888;font-size:11px;font-family:inherit;cursor:pointer;transition:all .15s}
+.close-editor-btn:hover{color:#ccc}
+.editor-log{flex:1;overflow-y:auto;padding:10px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#555;background:#080a10}
+.editor-log .log-line{padding:2px 0;border-bottom:1px solid #0f1018;white-space:pre-wrap;word-break:break-all}
+.editor-log .log-ok{color:#4a8a4a}
+.editor-log .log-err{color:#c05050}
+.editor-log .log-info{color:#4a6a9a}
+.snippet-list{padding:8px 12px;border-bottom:1px solid #181a28}
+.snippet-list h4{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#333;margin-bottom:6px}
+.snippet-btn{display:block;width:100%;text-align:left;padding:5px 8px;border:1px solid #181a28;border-radius:4px;background:#0d0f18;color:#4a6090;font-size:10px;font-family:inherit;cursor:pointer;margin-bottom:4px;transition:all .15s}
+.snippet-btn:hover{background:#12151e;color:#8090c0;border-color:#252840}
+
+/* ── FOOTER ── */
+.footer-info{padding:10px 28px;font-size:9px;color:#282a38;border-top:1px solid #141620}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Global Development Hex Cartogram <span class="mode-badge" id="mode-badge">2D · Color</span></h1>
+    <div class="subtitle">Each country = one hexagon · Equal visual weight eliminates area bias · Hogräfer et al. 2020 (schematization) · Nusrat & Kobourov 2016 (equal-area)</div>
+  </div>
+</div>
+
+<div class="top-bar">
+  <div id="controls" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+  <div class="sep"></div>
+  <button class="btn mode-btn active" id="btn-2d" onclick="setMode('2d')">2D Map</button>
+  <button class="btn mode-btn" id="btn-3d" onclick="setMode('3d')">3D Pillars</button>
+  <div class="sep"></div>
+  <button class="btn" id="btn-time" onclick="toggleTime()">⏱ Time Slider</button>
+  <div class="sep"></div>
+  <button class="btn editor-btn" id="btn-editor" onclick="openEditor()">⟨/⟩ Live Editor</button>
+</div>
+
+<div class="time-bar" id="time-bar">
+  <div><div class="year-label">Year</div><div class="year-display" id="year-display">2015</div></div>
+  <input type="range" class="year-slider" id="year-slider" min="0" max="10" value="5" step="1">
+  <button class="play-btn" id="play-btn" onclick="togglePlay()">▶ Play</button>
+  <span class="ts-note">Time-series: child mortality · happiness · poverty · homicide · fertility · pop. growth</span>
+</div>
+
+<div class="legend-bar" id="legend-bar"></div>
+<div class="region-legend" id="region-legend"></div>
+
+<div class="main-container">
+  <div class="map-area" id="map-area">
+    <canvas id="canvas3d"></canvas>
+    <div class="info-3d">Drag to rotate · Scroll to zoom · Click pillar to select</div>
+  </div>
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-empty">Click a hexagon<br>to explore details<br><br><span style="color:#252535">Click again to deselect<br>or press Escape</span></div>
+  </div>
+</div>
+
+<div class="footer-info">
+  Group 10 — Jeronim, Melika, Hiorhii, Miloš · Advanced Interactive Visualization 2026 ·
+  Data: Our World in Data, World Bank PIP, World Happiness Report 2015
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<!-- LIVE EDITOR OVERLAY -->
+<div class="editor-overlay" id="editor-overlay">
+  <div class="editor-header">
+    <div>
+      <h3>⟨/⟩ Live D3 Editor</h3>
+      <p>Edit the visualization's update functions directly. Changes apply instantly when you click Run.</p>
+    </div>
+  </div>
+  <div class="editor-body">
+    <div class="editor-pane">
+      <div class="editor-pane-label">JavaScript — edit updateMap() / draw3D() / color scales / anything</div>
+      <div id="monaco-container"></div>
+    </div>
+    <div class="editor-sidebar">
+      <div class="editor-sidebar-top">
+        <button class="run-btn" onclick="runEditorCode()">▶ Run Code (Ctrl+Enter)</button>
+        <button class="close-editor-btn" onclick="closeEditor()">✕ Close Editor</button>
+      </div>
+      <div class="snippet-list">
+        <h4>Quick Snippets</h4>
+        <button class="snippet-btn" onclick="loadSnippet('colorscale')">Change color scale</button>
+        <button class="snippet-btn" onclick="loadSnippet('threshold')">Add threshold lines</button>
+        <button class="snippet-btn" onclick="loadSnippet('sizeencode')">Encode size by value</button>
+        <button class="snippet-btn" onclick="loadSnippet('pillarbase')">Change pillar base color</button>
+        <button class="snippet-btn" onclick="loadSnippet('labelall')">Show all country names</button>
+        <button class="snippet-btn" onclick="loadSnippet('reset')">Reset to defaults</button>
+      </div>
+      <div class="editor-pane-label" style="padding:6px 12px">Console</div>
+      <div class="editor-log" id="editor-log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  DATA
+// ════════════════════════════════════════════════════════
+const DATA = {"countries":{"NOR":{"name":"Norway","region":"Europe","income":"High","child_mortality":2.6,"fertility":1.73,"homicide":0.56,"pop_growth":1.13,"poverty":0.2,"happiness":7.52},"DNK":{"name":"Denmark","region":"Europe","income":"High","child_mortality":3.5,"fertility":1.71,"homicide":0.99,"pop_growth":0.57,"poverty":0.3,"happiness":7.53},"CHE":{"name":"Switzerland","region":"Europe","income":"High","child_mortality":3.9,"fertility":1.54,"homicide":0.54,"pop_growth":1.2,"poverty":0.0,"happiness":7.51},"FIN":{"name":"Finland","region":"Europe","income":"High","child_mortality":2.3,"fertility":1.65,"homicide":1.6,"pop_growth":0.4,"poverty":0.1,"happiness":7.41},"NLD":{"name":"Netherlands","region":"Europe","income":"High","child_mortality":3.6,"fertility":1.66,"homicide":0.61,"pop_growth":0.42,"poverty":0.2,"happiness":7.38},"SWE":{"name":"Sweden","region":"Europe","income":"High","child_mortality":2.9,"fertility":1.88,"homicide":1.08,"pop_growth":0.84,"poverty":0.2,"happiness":7.29},"AUT":{"name":"Austria","region":"Europe","income":"High","child_mortality":3.5,"fertility":1.47,"homicide":0.51,"pop_growth":0.55,"poverty":0.3,"happiness":7.2},"DEU":{"name":"Germany","region":"Europe","income":"High","child_mortality":3.7,"fertility":1.5,"homicide":0.85,"pop_growth":0.22,"poverty":0.2,"happiness":6.75},"GBR":{"name":"United Kingdom","region":"Europe","income":"High","child_mortality":4.2,"fertility":1.8,"homicide":0.99,"pop_growth":0.63,"poverty":0.5,"happiness":6.87},"FRA":{"name":"France","region":"Europe","income":"High","child_mortality":3.9,"fertility":1.96,"homicide":1.2,"pop_growth":0.43,"poverty":0.3,"happiness":6.58},"IRL":{"name":"Ireland","region":"Europe","income":"High","child_mortality":3.6,"fertility":1.85,"homicide":0.64,"pop_growth":0.32,"poverty":0.4,"happiness":6.94},"BEL":{"name":"Belgium","region":"Europe","income":"High","child_mortality":3.8,"fertility":1.7,"homicide":1.76,"pop_growth":0.53,"poverty":0.3,"happiness":6.94},"ESP":{"name":"Spain","region":"Europe","income":"High","child_mortality":3.3,"fertility":1.33,"homicide":0.66,"pop_growth":-0.02,"poverty":1.5,"happiness":6.33},"ITA":{"name":"Italy","region":"Europe","income":"High","child_mortality":3.5,"fertility":1.37,"homicide":0.78,"pop_growth":-0.15,"poverty":1.2,"happiness":5.95},"PRT":{"name":"Portugal","region":"Europe","income":"High","child_mortality":3.6,"fertility":1.31,"homicide":0.97,"pop_growth":-0.32,"poverty":1.0,"happiness":5.1},"GRC":{"name":"Greece","region":"Europe","income":"High","child_mortality":4.0,"fertility":1.3,"homicide":0.85,"pop_growth":-0.43,"poverty":1.5,"happiness":5.03},"CZE":{"name":"Czechia","region":"Europe","income":"High","child_mortality":3.1,"fertility":1.57,"homicide":0.75,"pop_growth":0.15,"poverty":0.1,"happiness":6.51},"POL":{"name":"Poland","region":"Europe","income":"High","child_mortality":4.7,"fertility":1.32,"homicide":0.74,"pop_growth":-0.05,"poverty":0.3,"happiness":5.79},"HUN":{"name":"Hungary","region":"Europe","income":"High","child_mortality":5.4,"fertility":1.44,"homicide":1.48,"pop_growth":-0.22,"poverty":0.7,"happiness":4.8},"ROU":{"name":"Romania","region":"Europe","income":"Upper-Mid","child_mortality":9.4,"fertility":1.58,"homicide":1.49,"pop_growth":-0.56,"poverty":2.5,"happiness":5.12},"BGR":{"name":"Bulgaria","region":"Europe","income":"Upper-Mid","child_mortality":8.7,"fertility":1.53,"homicide":1.77,"pop_growth":-0.63,"poverty":2.0,"happiness":4.22},"HRV":{"name":"Croatia","region":"Europe","income":"High","child_mortality":4.4,"fertility":1.4,"homicide":0.87,"pop_growth":-0.49,"poverty":0.5,"happiness":5.76},"SVK":{"name":"Slovakia","region":"Europe","income":"High","child_mortality":6.0,"fertility":1.4,"homicide":1.03,"pop_growth":0.08,"poverty":0.3,"happiness":5.99},"SVN":{"name":"Slovenia","region":"Europe","income":"High","child_mortality":2.7,"fertility":1.57,"homicide":0.48,"pop_growth":0.07,"poverty":0.1,"happiness":5.85},"EST":{"name":"Estonia","region":"Europe","income":"High","child_mortality":2.9,"fertility":1.58,"homicide":3.19,"pop_growth":-0.14,"poverty":0.6,"happiness":5.43},"LVA":{"name":"Latvia","region":"Europe","income":"High","child_mortality":5.0,"fertility":1.7,"homicide":3.36,"pop_growth":-1.06,"poverty":0.8,"happiness":5.1},"LTU":{"name":"Lithuania","region":"Europe","income":"High","child_mortality":4.9,"fertility":1.63,"homicide":5.45,"pop_growth":-1.07,"poverty":0.7,"happiness":5.83},"ISL":{"name":"Iceland","region":"Europe","income":"High","child_mortality":2.1,"fertility":1.8,"homicide":0.3,"pop_growth":0.79,"poverty":0.1,"happiness":7.5},"UKR":{"name":"Ukraine","region":"Europe","income":"Lower-Mid","child_mortality":9.0,"fertility":1.51,"homicide":4.36,"pop_growth":-0.4,"poverty":1.5,"happiness":4.32},"RUS":{"name":"Russia","region":"Eurasia","income":"Upper-Mid","child_mortality":9.6,"fertility":1.78,"homicide":11.31,"pop_growth":0.19,"poverty":0.5,"happiness":5.72},"BLR":{"name":"Belarus","region":"Europe","income":"Upper-Mid","child_mortality":4.0,"fertility":1.72,"homicide":3.58,"pop_growth":-0.1,"poverty":0.1,"happiness":5.81},"SRB":{"name":"Serbia","region":"Europe","income":"Upper-Mid","child_mortality":6.1,"fertility":1.46,"homicide":1.13,"pop_growth":-0.46,"poverty":1.0,"happiness":5.12},"ALB":{"name":"Albania","region":"Europe","income":"Upper-Mid","child_mortality":13.4,"fertility":1.73,"homicide":2.28,"pop_growth":-0.14,"poverty":3.5,"happiness":4.66},"MKD":{"name":"North Macedonia","region":"Europe","income":"Upper-Mid","child_mortality":6.8,"fertility":1.5,"homicide":1.36,"pop_growth":0.08,"poverty":2.5,"happiness":5.01},"MDA":{"name":"Moldova","region":"Europe","income":"Lower-Mid","child_mortality":15.5,"fertility":1.26,"homicide":3.19,"pop_growth":-0.07,"poverty":2.0,"happiness":5.9},"USA":{"name":"United States","region":"North America","income":"High","child_mortality":6.5,"fertility":1.84,"homicide":4.88,"pop_growth":0.73,"poverty":1.0,"happiness":7.12},"CAN":{"name":"Canada","region":"North America","income":"High","child_mortality":4.9,"fertility":1.6,"homicide":1.68,"pop_growth":0.99,"poverty":0.5,"happiness":7.43},"MEX":{"name":"Mexico","region":"Central America","income":"Upper-Mid","child_mortality":14.6,"fertility":2.27,"homicide":16.35,"pop_growth":1.19,"poverty":7.0,"happiness":6.58},"GTM":{"name":"Guatemala","region":"Central America","income":"Upper-Mid","child_mortality":29.1,"fertility":3.07,"homicide":27.26,"pop_growth":2.0,"poverty":18.0,"happiness":6.32},"HND":{"name":"Honduras","region":"Central America","income":"Lower-Mid","child_mortality":19.4,"fertility":2.5,"homicide":60.0,"pop_growth":1.7,"poverty":28.0,"happiness":4.79},"SLV":{"name":"El Salvador","region":"Central America","income":"Lower-Mid","child_mortality":15.0,"fertility":1.95,"homicide":64.2,"pop_growth":0.52,"poverty":7.0,"happiness":6.17},"NIC":{"name":"Nicaragua","region":"Central America","income":"Lower-Mid","child_mortality":20.0,"fertility":2.35,"homicide":8.0,"pop_growth":1.09,"poverty":10.0,"happiness":5.83},"CRI":{"name":"Costa Rica","region":"Central America","income":"Upper-Mid","child_mortality":9.0,"fertility":1.76,"homicide":11.83,"pop_growth":1.05,"poverty":3.0,"happiness":7.23},"PAN":{"name":"Panama","region":"Central America","income":"High","child_mortality":16.0,"fertility":2.45,"homicide":9.39,"pop_growth":1.69,"poverty":5.0,"happiness":6.7},"CUB":{"name":"Cuba","region":"Caribbean","income":"Upper-Mid","child_mortality":5.7,"fertility":1.63,"homicide":4.72,"pop_growth":-0.11,"poverty":0.5,"happiness":5.55},"DOM":{"name":"Dominican Republic","region":"Caribbean","income":"Upper-Mid","child_mortality":31.0,"fertility":2.44,"homicide":17.4,"pop_growth":1.17,"poverty":6.0,"happiness":5.23},"JAM":{"name":"Jamaica","region":"Caribbean","income":"Upper-Mid","child_mortality":15.0,"fertility":2.03,"homicide":43.21,"pop_growth":-0.3,"poverty":10.0,"happiness":5.31},"HTI":{"name":"Haiti","region":"Caribbean","income":"Low","child_mortality":67.0,"fertility":3.07,"homicide":6.76,"pop_growth":1.3,"poverty":50.0,"happiness":3.6},"TTO":{"name":"Trinidad and Tobago","region":"Caribbean","income":"High","child_mortality":19.0,"fertility":1.7,"homicide":25.9,"pop_growth":0.35,"poverty":5.0,"happiness":6.17},"BRA":{"name":"Brazil","region":"South America","income":"Upper-Mid","child_mortality":16.0,"fertility":1.75,"homicide":26.74,"pop_growth":0.85,"poverty":8.0,"happiness":6.98},"ARG":{"name":"Argentina","region":"South America","income":"Upper-Mid","child_mortality":11.1,"fertility":2.32,"homicide":6.53,"pop_growth":1.05,"poverty":4.0,"happiness":6.57},"COL":{"name":"Colombia","region":"South America","income":"Upper-Mid","child_mortality":15.9,"fertility":1.83,"homicide":26.5,"pop_growth":0.87,"poverty":12.0,"happiness":6.48},"CHL":{"name":"Chile","region":"South America","income":"High","child_mortality":7.9,"fertility":1.76,"homicide":3.59,"pop_growth":0.87,"poverty":1.5,"happiness":6.67},"PER":{"name":"Peru","region":"South America","income":"Upper-Mid","child_mortality":15.0,"fertility":2.37,"homicide":7.16,"pop_growth":1.3,"poverty":9.0,"happiness":5.72},"VEN":{"name":"Venezuela","region":"South America","income":"Upper-Mid","child_mortality":15.3,"fertility":2.32,"homicide":57.15,"pop_growth":1.4,"poverty":15.0,"happiness":6.08},"ECU":{"name":"Ecuador","region":"South America","income":"Upper-Mid","child_mortality":14.5,"fertility":2.51,"homicide":8.23,"pop_growth":1.56,"poverty":9.0,"happiness":5.98},"BOL":{"name":"Bolivia","region":"South America","income":"Lower-Mid","child_mortality":30.4,"fertility":2.88,"homicide":12.4,"pop_growth":1.52,"poverty":14.0,"happiness":4.82},"PRY":{"name":"Paraguay","region":"South America","income":"Upper-Mid","child_mortality":19.6,"fertility":2.49,"homicide":9.29,"pop_growth":1.35,"poverty":5.0,"happiness":5.54},"URY":{"name":"Uruguay","region":"South America","income":"High","child_mortality":8.7,"fertility":1.98,"homicide":7.77,"pop_growth":0.35,"poverty":1.0,"happiness":6.49},"CHN":{"name":"China","region":"East Asia","income":"Upper-Mid","child_mortality":10.7,"fertility":1.66,"homicide":0.74,"pop_growth":0.52,"poverty":4.0,"happiness":5.14},"JPN":{"name":"Japan","region":"East Asia","income":"High","child_mortality":2.7,"fertility":1.45,"homicide":0.28,"pop_growth":-0.12,"poverty":0.5,"happiness":5.99},"KOR":{"name":"South Korea","region":"East Asia","income":"High","child_mortality":3.4,"fertility":1.24,"homicide":0.74,"pop_growth":0.38,"poverty":0.2,"happiness":5.98},"TWN":{"name":"Taiwan","region":"East Asia","income":"High","child_mortality":4.0,"fertility":1.18,"homicide":0.82,"pop_growth":0.22,"poverty":0.3,"happiness":6.3},"MNG":{"name":"Mongolia","region":"East Asia","income":"Lower-Mid","child_mortality":22.1,"fertility":2.69,"homicide":7.2,"pop_growth":1.84,"poverty":3.0,"happiness":4.87},"PRK":{"name":"North Korea","region":"East Asia","income":"Low","child_mortality":18.2,"fertility":1.94,"homicide":4.4,"pop_growth":0.46,"poverty":30.0,"happiness":3.0},"IDN":{"name":"Indonesia","region":"Southeast Asia","income":"Lower-Mid","child_mortality":27.2,"fertility":2.36,"homicide":0.5,"pop_growth":1.16,"poverty":22.0,"happiness":5.4},"THA":{"name":"Thailand","region":"Southeast Asia","income":"Upper-Mid","child_mortality":11.8,"fertility":1.53,"homicide":3.51,"pop_growth":0.35,"poverty":0.3,"happiness":6.46},"VNM":{"name":"Vietnam","region":"Southeast Asia","income":"Lower-Mid","child_mortality":21.7,"fertility":2.0,"homicide":1.52,"pop_growth":1.08,"poverty":5.0,"happiness":5.07},"PHL":{"name":"Philippines","region":"Southeast Asia","income":"Lower-Mid","child_mortality":28.0,"fertility":2.98,"homicide":9.84,"pop_growth":1.58,"poverty":18.0,"happiness":5.07},"MYS":{"name":"Malaysia","region":"Southeast Asia","income":"Upper-Mid","child_mortality":7.4,"fertility":2.0,"homicide":2.11,"pop_growth":1.51,"poverty":0.3,"happiness":6.0},"SGP":{"name":"Singapore","region":"Southeast Asia","income":"High","child_mortality":2.8,"fertility":1.24,"homicide":0.25,"pop_growth":1.18,"poverty":0.0,"happiness":6.57},"MMR":{"name":"Myanmar","region":"Southeast Asia","income":"Lower-Mid","child_mortality":50.8,"fertility":2.23,"homicide":2.39,"pop_growth":0.87,"poverty":15.0,"happiness":4.31},"KHM":{"name":"Cambodia","region":"Southeast Asia","income":"Lower-Mid","child_mortality":28.7,"fertility":2.56,"homicide":1.84,"pop_growth":1.56,"poverty":18.0,"happiness":3.82},"LAO":{"name":"Laos","region":"Southeast Asia","income":"Lower-Mid","child_mortality":63.5,"fertility":2.93,"homicide":7.02,"pop_growth":1.55,"poverty":30.0,"happiness":4.88},"IND":{"name":"India","region":"South Asia","income":"Lower-Mid","child_mortality":39.4,"fertility":2.3,"homicide":3.22,"pop_growth":1.18,"poverty":35.0,"happiness":4.57},"PAK":{"name":"Pakistan","region":"South Asia","income":"Lower-Mid","child_mortality":81.1,"fertility":3.55,"homicide":4.2,"pop_growth":2.1,"poverty":35.0,"happiness":5.19},"BGD":{"name":"Bangladesh","region":"South Asia","income":"Lower-Mid","child_mortality":36.4,"fertility":2.14,"homicide":2.51,"pop_growth":1.14,"poverty":40.0,"happiness":4.69},"LKA":{"name":"Sri Lanka","region":"South Asia","income":"Lower-Mid","child_mortality":8.4,"fertility":2.06,"homicide":2.91,"pop_growth":0.48,"poverty":5.0,"happiness":4.27},"NPL":{"name":"Nepal","region":"South Asia","income":"Lower-Mid","child_mortality":33.8,"fertility":2.12,"homicide":2.56,"pop_growth":1.18,"poverty":25.0,"happiness":4.51},"AFG":{"name":"Afghanistan","region":"South Asia","income":"Low","child_mortality":66.3,"fertility":4.87,"homicide":6.5,"pop_growth":2.7,"poverty":50.0,"happiness":3.58},"KAZ":{"name":"Kazakhstan","region":"Central Asia","income":"Upper-Mid","child_mortality":14.4,"fertility":2.73,"homicide":7.84,"pop_growth":1.49,"poverty":1.0,"happiness":5.86},"UZB":{"name":"Uzbekistan","region":"Central Asia","income":"Lower-Mid","child_mortality":22.0,"fertility":2.45,"homicide":3.36,"pop_growth":1.76,"poverty":40.0,"happiness":6.0},"TKM":{"name":"Turkmenistan","region":"Central Asia","income":"Upper-Mid","child_mortality":42.0,"fertility":2.75,"homicide":4.2,"pop_growth":1.76,"poverty":20.0,"happiness":5.55},"KGZ":{"name":"Kyrgyzstan","region":"Central Asia","income":"Lower-Mid","child_mortality":21.3,"fertility":3.18,"homicide":4.28,"pop_growth":1.83,"poverty":20.0,"happiness":5.29},"TJK":{"name":"Tajikistan","region":"Central Asia","income":"Lower-Mid","child_mortality":33.6,"fertility":3.42,"homicide":1.6,"pop_growth":2.25,"poverty":20.0,"happiness":4.79},"SAU":{"name":"Saudi Arabia","region":"Middle East","income":"High","child_mortality":14.5,"fertility":2.55,"homicide":1.5,"pop_growth":2.12,"poverty":0.5,"happiness":6.41},"ARE":{"name":"UAE","region":"Middle East","income":"High","child_mortality":7.2,"fertility":1.75,"homicide":0.55,"pop_growth":1.53,"poverty":0.2,"happiness":6.57},"ISR":{"name":"Israel","region":"Middle East","income":"High","child_mortality":3.6,"fertility":3.09,"homicide":1.36,"pop_growth":1.95,"poverty":0.5,"happiness":7.28},"TUR":{"name":"Turkey","region":"Middle East","income":"Upper-Mid","child_mortality":12.6,"fertility":2.05,"homicide":4.31,"pop_growth":1.68,"poverty":3.0,"happiness":5.33},"IRN":{"name":"Iran","region":"Middle East","income":"Upper-Mid","child_mortality":15.1,"fertility":1.75,"homicide":2.47,"pop_growth":1.24,"poverty":5.0,"happiness":4.69},"IRQ":{"name":"Iraq","region":"Middle East","income":"Upper-Mid","child_mortality":30.4,"fertility":4.1,"homicide":9.9,"pop_growth":2.9,"poverty":15.0,"happiness":4.68},"JOR":{"name":"Jordan","region":"Middle East","income":"Upper-Mid","child_mortality":17.7,"fertility":3.38,"homicide":1.6,"pop_growth":3.86,"poverty":1.5,"happiness":5.3},"LBN":{"name":"Lebanon","region":"Middle East","income":"Upper-Mid","child_mortality":8.0,"fertility":1.72,"homicide":2.24,"pop_growth":4.28,"poverty":2.0,"happiness":5.23},"EGY":{"name":"Egypt","region":"North Africa","income":"Lower-Mid","child_mortality":24.0,"fertility":3.28,"homicide":2.56,"pop_growth":2.22,"poverty":25.0,"happiness":4.19},"YEM":{"name":"Yemen","region":"Middle East","income":"Low","child_mortality":52.0,"fertility":4.35,"homicide":6.7,"pop_growth":2.55,"poverty":40.0,"happiness":3.59},"OMN":{"name":"Oman","region":"Middle East","income":"High","child_mortality":11.0,"fertility":2.85,"homicide":0.69,"pop_growth":5.31,"poverty":0.5,"happiness":6.85},"QAT":{"name":"Qatar","region":"Middle East","income":"High","child_mortality":8.0,"fertility":1.92,"homicide":0.38,"pop_growth":3.44,"poverty":0.1,"happiness":6.38},"KWT":{"name":"Kuwait","region":"Middle East","income":"High","child_mortality":8.6,"fertility":2.1,"homicide":1.84,"pop_growth":3.3,"poverty":0.2,"happiness":6.24},"BHR":{"name":"Bahrain","region":"Middle East","income":"High","child_mortality":7.4,"fertility":2.0,"homicide":0.54,"pop_growth":3.54,"poverty":0.3,"happiness":5.96},"MAR":{"name":"Morocco","region":"North Africa","income":"Lower-Mid","child_mortality":27.6,"fertility":2.45,"homicide":1.24,"pop_growth":1.37,"poverty":9.0,"happiness":5.01},"DZA":{"name":"Algeria","region":"North Africa","income":"Upper-Mid","child_mortality":25.5,"fertility":3.0,"homicide":1.36,"pop_growth":1.84,"poverty":5.0,"happiness":5.61},"TUN":{"name":"Tunisia","region":"North Africa","income":"Lower-Mid","child_mortality":14.0,"fertility":2.17,"homicide":3.09,"pop_growth":1.11,"poverty":4.0,"happiness":4.74},"LBY":{"name":"Libya","region":"North Africa","income":"Upper-Mid","child_mortality":13.2,"fertility":2.24,"homicide":2.5,"pop_growth":0.1,"poverty":5.0,"happiness":5.75},"NGA":{"name":"Nigeria","region":"West Africa","income":"Lower-Mid","child_mortality":108.8,"fertility":5.53,"homicide":9.85,"pop_growth":2.64,"poverty":55.0,"happiness":5.27},"ETH":{"name":"Ethiopia","region":"East Africa","income":"Low","child_mortality":59.2,"fertility":4.32,"homicide":7.56,"pop_growth":2.54,"poverty":60.0,"happiness":4.51},"ZAF":{"name":"South Africa","region":"Southern Africa","income":"Upper-Mid","child_mortality":37.1,"fertility":2.44,"homicide":34.27,"pop_growth":1.33,"poverty":35.0,"happiness":4.64},"KEN":{"name":"Kenya","region":"East Africa","income":"Lower-Mid","child_mortality":49.4,"fertility":3.77,"homicide":4.87,"pop_growth":2.64,"poverty":30.0,"happiness":4.55},"TZA":{"name":"Tanzania","region":"East Africa","income":"Lower-Mid","child_mortality":53.0,"fertility":5.01,"homicide":7.93,"pop_growth":3.09,"poverty":50.0,"happiness":3.78},"GHA":{"name":"Ghana","region":"West Africa","income":"Lower-Mid","child_mortality":58.5,"fertility":3.89,"homicide":1.68,"pop_growth":2.27,"poverty":25.0,"happiness":4.12},"CIV":{"name":"C\u00f4te d'Ivoire","region":"West Africa","income":"Lower-Mid","child_mortality":89.5,"fertility":4.79,"homicide":10.22,"pop_growth":2.52,"poverty":30.0,"happiness":3.66},"CMR":{"name":"Cameroon","region":"Central Africa","income":"Lower-Mid","child_mortality":83.7,"fertility":4.68,"homicide":2.72,"pop_growth":2.59,"poverty":25.0,"happiness":4.25},"SEN":{"name":"Senegal","region":"West Africa","income":"Lower-Mid","child_mortality":47.2,"fertility":4.69,"homicide":7.33,"pop_growth":2.93,"poverty":40.0,"happiness":3.9},"UGA":{"name":"Uganda","region":"East Africa","income":"Low","child_mortality":53.0,"fertility":5.62,"homicide":10.67,"pop_growth":3.32,"poverty":50.0,"happiness":3.74},"MOZ":{"name":"Mozambique","region":"East Africa","income":"Low","child_mortality":71.9,"fertility":5.19,"homicide":3.4,"pop_growth":2.82,"poverty":65.0,"happiness":4.97},"MDG":{"name":"Madagascar","region":"East Africa","income":"Low","child_mortality":46.4,"fertility":4.07,"homicide":7.7,"pop_growth":2.74,"poverty":70.0,"happiness":3.68},"AGO":{"name":"Angola","region":"Central Africa","income":"Lower-Mid","child_mortality":78.9,"fertility":5.89,"homicide":4.76,"pop_growth":3.28,"poverty":45.0,"happiness":4.03},"MLI":{"name":"Mali","region":"West Africa","income":"Low","child_mortality":110.6,"fertility":6.06,"homicide":10.91,"pop_growth":3.05,"poverty":60.0,"happiness":3.99},"BFA":{"name":"Burkina Faso","region":"West Africa","income":"Low","child_mortality":84.0,"fertility":5.42,"homicide":1.27,"pop_growth":2.92,"poverty":60.0,"happiness":3.59},"NER":{"name":"Niger","region":"West Africa","income":"Low","child_mortality":91.3,"fertility":7.38,"homicide":4.44,"pop_growth":3.86,"poverty":75.0,"happiness":3.85},"TCD":{"name":"Chad","region":"Central Africa","income":"Low","child_mortality":119.2,"fertility":5.74,"homicide":9.76,"pop_growth":3.19,"poverty":55.0,"happiness":3.94},"COD":{"name":"DR Congo","region":"Central Africa","income":"Low","child_mortality":91.1,"fertility":6.06,"homicide":13.55,"pop_growth":3.15,"poverty":70.0,"happiness":4.52},"RWA":{"name":"Rwanda","region":"East Africa","income":"Low","child_mortality":37.3,"fertility":3.97,"homicide":2.52,"pop_growth":2.35,"poverty":50.0,"happiness":3.47},"ZMB":{"name":"Zambia","region":"Southern Africa","income":"Lower-Mid","child_mortality":64.0,"fertility":4.73,"homicide":2.78,"pop_growth":2.97,"poverty":55.0,"happiness":4.51},"ZWE":{"name":"Zimbabwe","region":"Southern Africa","income":"Lower-Mid","child_mortality":55.6,"fertility":3.65,"homicide":6.72,"pop_growth":2.3,"poverty":40.0,"happiness":4.61},"MWI":{"name":"Malawi","region":"Southern Africa","income":"Low","child_mortality":64.0,"fertility":4.29,"homicide":1.72,"pop_growth":2.81,"poverty":65.0,"happiness":4.29},"BWA":{"name":"Botswana","region":"Southern Africa","income":"Upper-Mid","child_mortality":38.5,"fertility":2.65,"homicide":15.4,"pop_growth":1.88,"poverty":30.0,"happiness":3.77},"NAM":{"name":"Namibia","region":"Southern Africa","income":"Upper-Mid","child_mortality":38.5,"fertility":3.36,"homicide":17.14,"pop_growth":2.23,"poverty":25.0,"happiness":4.57},"SSD":{"name":"South Sudan","region":"East Africa","income":"Low","child_mortality":96.0,"fertility":4.67,"homicide":13.9,"pop_growth":0.83,"poverty":70.0,"happiness":3.83},"SOM":{"name":"Somalia","region":"East Africa","income":"Low","child_mortality":127.2,"fertility":6.42,"homicide":4.31,"pop_growth":2.79,"poverty":60.0,"happiness":3.0},"SDN":{"name":"Sudan","region":"North Africa","income":"Low","child_mortality":65.0,"fertility":4.43,"homicide":6.05,"pop_growth":2.34,"poverty":45.0,"happiness":4.55},"COG":{"name":"Congo","region":"Central Africa","income":"Lower-Mid","child_mortality":44.7,"fertility":4.57,"homicide":8.64,"pop_growth":2.54,"poverty":35.0,"happiness":3.99},"BEN":{"name":"Benin","region":"West Africa","income":"Lower-Mid","child_mortality":97.0,"fertility":4.86,"homicide":1.11,"pop_growth":2.78,"poverty":45.0,"happiness":3.34},"TGO":{"name":"Togo","region":"West Africa","income":"Low","child_mortality":70.0,"fertility":4.45,"homicide":10.22,"pop_growth":2.54,"poverty":40.0,"happiness":2.84},"SLE":{"name":"Sierra Leone","region":"West Africa","income":"Low","child_mortality":120.4,"fertility":4.32,"homicide":1.71,"pop_growth":2.1,"poverty":55.0,"happiness":4.51},"LBR":{"name":"Liberia","region":"West Africa","income":"Low","child_mortality":69.9,"fertility":4.42,"homicide":3.24,"pop_growth":2.5,"poverty":50.0,"happiness":3.62},"GNB":{"name":"Guinea-Bissau","region":"West Africa","income":"Low","child_mortality":88.0,"fertility":4.41,"homicide":1.54,"pop_growth":2.46,"poverty":55.0,"happiness":3.58},"GIN":{"name":"Guinea","region":"West Africa","income":"Low","child_mortality":86.7,"fertility":4.74,"homicide":8.62,"pop_growth":2.63,"poverty":55.0,"happiness":3.61},"MRT":{"name":"Mauritania","region":"West Africa","income":"Lower-Mid","child_mortality":78.1,"fertility":4.52,"homicide":7.0,"pop_growth":2.69,"poverty":15.0,"happiness":4.44},"GMB":{"name":"Gambia","region":"West Africa","income":"Low","child_mortality":58.0,"fertility":5.25,"homicide":8.87,"pop_growth":3.05,"poverty":40.0,"happiness":3.59},"ERI":{"name":"Eritrea","region":"East Africa","income":"Low","child_mortality":44.5,"fertility":4.03,"homicide":7.89,"pop_growth":2.21,"poverty":50.0,"happiness":3.3},"GAB":{"name":"Gabon","region":"Central Africa","income":"Upper-Mid","child_mortality":42.5,"fertility":3.68,"homicide":9.13,"pop_growth":2.41,"poverty":10.0,"happiness":4.47},"GNQ":{"name":"Equatorial Guinea","region":"Central Africa","income":"Upper-Mid","child_mortality":83.0,"fertility":4.63,"homicide":2.21,"pop_growth":3.62,"poverty":30.0,"happiness":4.0},"CPV":{"name":"Cape Verde","region":"West Africa","income":"Lower-Mid","child_mortality":18.8,"fertility":2.22,"homicide":11.44,"pop_growth":1.1,"poverty":15.0,"happiness":4.5},"MUS":{"name":"Mauritius","region":"East Africa","income":"Upper-Mid","child_mortality":13.5,"fertility":1.44,"homicide":2.68,"pop_growth":0.14,"poverty":2.0,"happiness":5.48},"SYC":{"name":"Seychelles","region":"East Africa","income":"High","child_mortality":13.0,"fertility":2.3,"homicide":8.28,"pop_growth":0.52,"poverty":1.0,"happiness":5.0},"AUS":{"name":"Australia","region":"Oceania","income":"High","child_mortality":3.8,"fertility":1.83,"homicide":0.98,"pop_growth":1.44,"poverty":0.5,"happiness":7.28},"NZL":{"name":"New Zealand","region":"Oceania","income":"High","child_mortality":5.4,"fertility":1.92,"homicide":0.91,"pop_growth":0.82,"poverty":0.3,"happiness":7.29},"PNG":{"name":"Papua New Guinea","region":"Oceania","income":"Lower-Mid","child_mortality":47.3,"fertility":3.6,"homicide":7.28,"pop_growth":2.1,"poverty":40.0,"happiness":3.98},"FJI":{"name":"Fiji","region":"Oceania","income":"Upper-Mid","child_mortality":22.4,"fertility":2.47,"homicide":2.49,"pop_growth":0.69,"poverty":20.0,"happiness":4.51},"GEO":{"name":"Georgia","region":"Eurasia","income":"Upper-Mid","child_mortality":11.2,"fertility":2.0,"homicide":2.72,"pop_growth":-0.27,"poverty":8.0,"happiness":4.29},"ARM":{"name":"Armenia","region":"Eurasia","income":"Upper-Mid","child_mortality":13.5,"fertility":1.65,"homicide":1.69,"pop_growth":0.28,"poverty":5.0,"happiness":4.35},"AZE":{"name":"Azerbaijan","region":"Eurasia","income":"Upper-Mid","child_mortality":26.7,"fertility":2.08,"homicide":2.13,"pop_growth":1.15,"poverty":1.0,"happiness":5.21},"CYP":{"name":"Cyprus","region":"Europe","income":"High","child_mortality":3.2,"fertility":1.32,"homicide":1.35,"pop_growth":0.93,"poverty":0.5,"happiness":5.55}},"hexLayout":[{"iso":"CAN","col":3,"row":1},{"iso":"ISL","col":10,"row":0},{"iso":"USA","col":3,"row":2},{"iso":"MEX","col":3,"row":3},{"iso":"GTM","col":3,"row":4},{"iso":"CUB","col":5,"row":3},{"iso":"HTI","col":6,"row":3},{"iso":"DOM","col":7,"row":3},{"iso":"HND","col":3,"row":5},{"iso":"SLV","col":4,"row":5},{"iso":"JAM","col":5,"row":4},{"iso":"TTO","col":7,"row":4},{"iso":"NIC","col":4,"row":6},{"iso":"CRI","col":4,"row":7},{"iso":"PAN","col":5,"row":7},{"iso":"COL","col":5,"row":6},{"iso":"VEN","col":6,"row":5},{"iso":"ECU","col":4,"row":8},{"iso":"BRA","col":6,"row":7},{"iso":"PER","col":5,"row":8},{"iso":"BOL","col":5,"row":9},{"iso":"PRY","col":6,"row":9},{"iso":"CHL","col":5,"row":10},{"iso":"ARG","col":6,"row":10},{"iso":"URY","col":7,"row":10},{"iso":"NOR","col":11,"row":0},{"iso":"SWE","col":12,"row":0},{"iso":"FIN","col":13,"row":0},{"iso":"GBR","col":10,"row":1},{"iso":"IRL","col":9,"row":1},{"iso":"DNK","col":12,"row":1},{"iso":"EST","col":13,"row":1},{"iso":"NLD","col":10,"row":2},{"iso":"BEL","col":11,"row":2},{"iso":"DEU","col":12,"row":2},{"iso":"POL","col":13,"row":2},{"iso":"LTU","col":14,"row":2},{"iso":"LVA","col":14,"row":1},{"iso":"FRA","col":10,"row":3},{"iso":"CHE","col":11,"row":3},{"iso":"AUT","col":12,"row":3},{"iso":"CZE","col":13,"row":3},{"iso":"BLR","col":14,"row":3},{"iso":"PRT","col":9,"row":4},{"iso":"ESP","col":10,"row":4},{"iso":"ITA","col":11,"row":4},{"iso":"SVN","col":12,"row":4},{"iso":"HUN","col":13,"row":4},{"iso":"UKR","col":15,"row":3},{"iso":"HRV","col":12,"row":5},{"iso":"SRB","col":13,"row":5},{"iso":"ROU","col":14,"row":4},{"iso":"MDA","col":15,"row":4},{"iso":"ALB","col":12,"row":6},{"iso":"MKD","col":13,"row":6},{"iso":"BGR","col":14,"row":5},{"iso":"GRC","col":12,"row":7},{"iso":"CYP","col":14,"row":6},{"iso":"RUS","col":16,"row":1},{"iso":"GEO","col":16,"row":3},{"iso":"ARM","col":16,"row":4},{"iso":"AZE","col":17,"row":3},{"iso":"TUR","col":14,"row":7},{"iso":"KAZ","col":17,"row":2},{"iso":"UZB","col":18,"row":3},{"iso":"TKM","col":18,"row":4},{"iso":"KGZ","col":18,"row":2},{"iso":"TJK","col":19,"row":3},{"iso":"ISR","col":15,"row":7},{"iso":"JOR","col":15,"row":8},{"iso":"LBN","col":15,"row":6},{"iso":"SAU","col":16,"row":8},{"iso":"IRQ","col":16,"row":7},{"iso":"IRN","col":17,"row":6},{"iso":"KWT","col":17,"row":7},{"iso":"BHR","col":17,"row":8},{"iso":"QAT","col":18,"row":8},{"iso":"ARE","col":18,"row":7},{"iso":"OMN","col":18,"row":6},{"iso":"YEM","col":17,"row":9},{"iso":"MAR","col":9,"row":5},{"iso":"DZA","col":10,"row":5},{"iso":"TUN","col":11,"row":5},{"iso":"LBY","col":12,"row":8},{"iso":"EGY","col":13,"row":8},{"iso":"SDN","col":14,"row":8},{"iso":"MRT","col":9,"row":6},{"iso":"SEN","col":8,"row":7},{"iso":"GMB","col":8,"row":8},{"iso":"GNB","col":8,"row":9},{"iso":"GIN","col":9,"row":8},{"iso":"SLE","col":8,"row":10},{"iso":"LBR","col":9,"row":9},{"iso":"CIV","col":9,"row":10},{"iso":"MLI","col":10,"row":7},{"iso":"BFA","col":10,"row":8},{"iso":"GHA","col":10,"row":9},{"iso":"TGO","col":11,"row":9},{"iso":"BEN","col":11,"row":8},{"iso":"NGA","col":11,"row":7},{"iso":"NER","col":11,"row":6},{"iso":"CMR","col":12,"row":9},{"iso":"TCD","col":12,"row":10},{"iso":"COG","col":12,"row":11},{"iso":"COD","col":13,"row":10},{"iso":"GAB","col":11,"row":10},{"iso":"GNQ","col":11,"row":11},{"iso":"AGO","col":12,"row":12},{"iso":"SSD","col":14,"row":9},{"iso":"ETH","col":15,"row":9},{"iso":"ERI","col":15,"row":10},{"iso":"SOM","col":16,"row":10},{"iso":"KEN","col":14,"row":10},{"iso":"UGA","col":14,"row":11},{"iso":"TZA","col":14,"row":12},{"iso":"RWA","col":13,"row":11},{"iso":"MOZ","col":14,"row":13},{"iso":"MWI","col":13,"row":13},{"iso":"MDG","col":15,"row":13},{"iso":"ZMB","col":13,"row":14},{"iso":"ZWE","col":14,"row":14},{"iso":"BWA","col":13,"row":15},{"iso":"NAM","col":12,"row":15},{"iso":"ZAF","col":13,"row":16},{"iso":"MUS","col":16,"row":14},{"iso":"SYC","col":17,"row":13},{"iso":"CPV","col":7,"row":7},{"iso":"AFG","col":18,"row":5},{"iso":"PAK","col":19,"row":5},{"iso":"IND","col":19,"row":7},{"iso":"NPL","col":20,"row":6},{"iso":"BGD","col":20,"row":7},{"iso":"LKA","col":19,"row":9},{"iso":"MMR","col":20,"row":8},{"iso":"THA","col":21,"row":7},{"iso":"VNM","col":21,"row":8},{"iso":"KHM","col":21,"row":9},{"iso":"LAO","col":21,"row":6},{"iso":"MYS","col":22,"row":9},{"iso":"SGP","col":22,"row":10},{"iso":"IDN","col":22,"row":11},{"iso":"PHL","col":23,"row":8},{"iso":"MNG","col":20,"row":2},{"iso":"CHN","col":20,"row":4},{"iso":"PRK","col":22,"row":3},{"iso":"KOR","col":22,"row":4},{"iso":"JPN","col":23,"row":3},{"iso":"TWN","col":22,"row":5},{"iso":"AUS","col":23,"row":12},{"iso":"NZL","col":24,"row":13},{"iso":"PNG","col":24,"row":10},{"iso":"FJI","col":25,"row":12}],"indicators":{"child_mortality":{"label":"Child Mortality","unit":"per 1,000","domain":[0,130],"colorScheme":"RdYlGn","reverse":true},"fertility":{"label":"Fertility Rate","unit":"births/woman","domain":[0,8],"colorScheme":"PuRd","reverse":false},"homicide":{"label":"Homicide Rate","unit":"per 100k","domain":[0,65],"colorScheme":"OrRd","reverse":false},"pop_growth":{"label":"Pop. Growth","unit":"% annual","domain":[-2,5],"colorScheme":"BrBG","reverse":false},"poverty":{"label":"Poverty (<$3.65/day)","unit":"%","domain":[0,80],"colorScheme":"YlOrRd","reverse":false},"happiness":{"label":"Happiness Score","unit":"0-10","domain":[2,8],"colorScheme":"RdYlGn","reverse":false}},"timeseries":{"child_mortality":{"NOR":{"2000":4.3,"2005":3.6,"2010":3.0,"2015":2.6,"2020":2.3,"2022":2.1},"SWE":{"2000":3.9,"2005":3.2,"2010":2.9,"2015":2.9,"2020":2.7,"2022":2.6},"DNK":{"2000":5.1,"2005":4.2,"2010":3.8,"2015":3.5,"2020":3.2,"2022":3.0},"FIN":{"2000":4.0,"2005":3.1,"2010":2.8,"2015":2.3,"2020":2.2,"2022":2.1},"DEU":{"2000":5.0,"2005":4.5,"2010":4.0,"2015":3.7,"2020":3.5,"2022":3.3},"GBR":{"2000":6.8,"2005":5.9,"2010":4.8,"2015":4.2,"2020":4.0,"2022":3.8},"FRA":{"2000":5.3,"2005":4.6,"2010":4.2,"2015":3.9,"2020":4.2,"2022":4.0},"USA":{"2000":8.0,"2005":7.5,"2010":7.0,"2015":6.5,"2020":6.2,"2022":5.9},"CAN":{"2000":6.0,"2005":5.5,"2010":5.0,"2015":4.9,"2020":4.5,"2022":4.2},"JPN":{"2000":4.0,"2005":3.4,"2010":2.9,"2015":2.7,"2020":2.5,"2022":2.4},"KOR":{"2000":5.0,"2005":4.3,"2010":3.8,"2015":3.4,"2020":3.0,"2022":2.8},"CHN":{"2000":38.0,"2005":24.0,"2010":15.0,"2015":10.7,"2020":7.4,"2022":6.5},"IND":{"2000":91.0,"2005":74.0,"2010":55.0,"2015":39.4,"2020":31.0,"2022":28.0},"PAK":{"2000":110.0,"2005":97.0,"2010":89.0,"2015":81.1,"2020":67.0,"2022":59.0},"BGD":{"2000":73.0,"2005":57.0,"2010":45.0,"2015":36.4,"2020":28.0,"2022":24.0},"NGA":{"2000":183.0,"2005":158.0,"2010":130.0,"2015":108.8,"2020":85.0,"2022":75.0},"ETH":{"2000":127.0,"2005":100.0,"2010":72.0,"2015":59.2,"2020":48.0,"2022":43.0},"KEN":{"2000":101.0,"2005":82.0,"2010":61.0,"2015":49.4,"2020":37.0,"2022":33.0},"ZAF":{"2000":68.0,"2005":62.0,"2010":45.0,"2015":37.1,"2020":30.0,"2022":27.0},"BRA":{"2000":30.0,"2005":22.0,"2010":18.0,"2015":16.0,"2020":14.0,"2022":12.5},"MEX":{"2000":26.0,"2005":20.0,"2010":17.0,"2015":14.6,"2020":13.5,"2022":12.8},"ARG":{"2000":19.0,"2005":15.0,"2010":13.0,"2015":11.1,"2020":10.0,"2022":9.5},"RUS":{"2000":18.0,"2005":15.0,"2010":11.0,"2015":9.6,"2020":7.0,"2022":6.5},"IDN":{"2000":50.0,"2005":38.0,"2010":31.0,"2015":27.2,"2020":23.0,"2022":21.0},"TUR":{"2000":34.0,"2005":22.0,"2010":16.0,"2015":12.6,"2020":9.8,"2022":8.9},"EGY":{"2000":43.0,"2005":35.0,"2010":28.0,"2015":24.0,"2020":18.0,"2022":16.0},"IRN":{"2000":40.0,"2005":30.0,"2010":22.0,"2015":15.1,"2020":12.0,"2022":10.5},"POL":{"2000":9.0,"2005":7.0,"2010":5.5,"2015":4.7,"2020":4.0,"2022":3.8},"ESP":{"2000":5.0,"2005":4.2,"2010":3.6,"2015":3.3,"2020":3.2,"2022":3.1},"ITA":{"2000":5.2,"2005":4.2,"2010":3.8,"2015":3.5,"2020":3.3,"2022":3.1},"AUS":{"2000":6.0,"2005":5.0,"2010":4.5,"2015":3.8,"2020":3.5,"2022":3.3},"COL":{"2000":27.0,"2005":22.0,"2010":18.0,"2015":15.9,"2020":13.0,"2022":11.5},"VNM":{"2000":38.0,"2005":30.0,"2010":26.0,"2015":21.7,"2020":18.0,"2022":16.0},"UKR":{"2000":18.0,"2005":15.0,"2010":11.0,"2015":9.0,"2020":7.5,"2022":7.0},"PHL":{"2000":38.0,"2005":33.0,"2010":30.0,"2015":28.0,"2020":26.0,"2022":24.0},"MYS":{"2000":13.0,"2005":9.0,"2010":7.5,"2015":7.4,"2020":6.5,"2022":5.9},"THA":{"2000":17.0,"2005":14.0,"2010":12.0,"2015":11.8,"2020":9.0,"2022":8.0},"AGO":{"2000":160.0,"2005":130.0,"2010":100.0,"2015":78.9,"2020":62.0,"2022":55.0},"MOZ":{"2000":147.0,"2005":115.0,"2010":86.0,"2015":71.9,"2020":56.0,"2022":50.0},"MLI":{"2000":196.0,"2005":168.0,"2010":135.0,"2015":110.6,"2020":92.0,"2022":84.0},"ZMB":{"2000":145.0,"2005":110.0,"2010":80.0,"2015":64.0,"2020":53.0,"2022":47.0},"PER":{"2000":35.0,"2005":26.0,"2010":18.0,"2015":15.0,"2020":13.0,"2022":11.0},"COD":{"2000":150.0,"2005":130.0,"2010":110.0,"2015":91.1,"2020":73.0,"2022":66.0}},"happiness":{"NOR":{"2015":7.52,"2016":7.5,"2017":7.54,"2018":7.59,"2019":7.55,"2020":7.49,"2021":7.37,"2022":7.32},"DNK":{"2015":7.53,"2016":7.53,"2017":7.52,"2018":7.56,"2019":7.6,"2020":7.65,"2021":7.62,"2022":7.58},"CHE":{"2015":7.51,"2016":7.51,"2017":7.49,"2018":7.49,"2019":7.45,"2020":7.56,"2021":7.57,"2022":7.51},"FIN":{"2015":7.41,"2016":7.41,"2017":7.47,"2018":7.63,"2019":7.77,"2020":7.81,"2021":7.84,"2022":7.82},"NLD":{"2015":7.38,"2016":7.34,"2017":7.38,"2018":7.44,"2019":7.49,"2020":7.46,"2021":7.45,"2022":7.4},"SWE":{"2015":7.29,"2016":7.29,"2017":7.28,"2018":7.31,"2019":7.34,"2020":7.35,"2021":7.36,"2022":7.28},"GBR":{"2015":6.87,"2016":6.87,"2017":6.71,"2018":7.05,"2019":7.05,"2020":7.16,"2021":7.06,"2022":6.94},"USA":{"2015":7.12,"2016":7.12,"2017":6.99,"2018":6.89,"2019":6.89,"2020":6.94,"2021":6.95,"2022":6.73},"DEU":{"2015":6.75,"2016":6.99,"2017":6.95,"2018":7.07,"2019":6.98,"2020":7.16,"2021":7.16,"2022":6.98},"CAN":{"2015":7.43,"2016":7.43,"2017":7.32,"2018":7.33,"2019":7.28,"2020":7.23,"2021":7.1,"2022":6.96},"AUS":{"2015":7.28,"2016":7.31,"2017":7.28,"2018":7.27,"2019":7.23,"2020":7.22,"2021":7.18,"2022":7.06},"JPN":{"2015":5.99,"2016":5.99,"2017":5.92,"2018":5.92,"2019":5.89,"2020":5.94,"2021":6.04,"2022":6.13},"KOR":{"2015":5.98,"2016":5.84,"2017":5.84,"2018":5.88,"2019":5.9,"2020":5.85,"2021":5.92,"2022":6.0},"CHN":{"2015":5.14,"2016":5.25,"2017":5.27,"2018":5.25,"2019":5.19,"2020":5.12,"2021":5.34,"2022":5.44},"IND":{"2015":4.57,"2016":4.4,"2017":4.32,"2018":4.19,"2019":3.57,"2020":3.82,"2021":3.78,"2022":4.04},"BRA":{"2015":6.98,"2016":6.95,"2017":6.64,"2018":6.42,"2019":6.3,"2020":6.33,"2021":6.33,"2022":6.18},"MEX":{"2015":6.58,"2016":7.19,"2017":6.77,"2018":6.59,"2019":6.6,"2020":6.47,"2021":6.49,"2022":6.68},"ARG":{"2015":6.57,"2016":6.65,"2017":6.6,"2018":6.39,"2019":6.09,"2020":6.03,"2021":5.97,"2022":6.08},"RUS":{"2015":5.72,"2016":5.86,"2017":5.96,"2018":5.81,"2019":5.65,"2020":5.54,"2021":5.48,"2022":5.66},"ZAF":{"2015":4.64,"2016":4.83,"2017":4.72,"2018":4.65,"2019":4.72,"2020":4.81,"2021":5.29,"2022":5.52},"NGA":{"2015":5.27,"2016":5.27,"2017":5.07,"2018":5.27,"2019":5.15,"2020":4.78,"2021":4.61,"2022":4.48},"KEN":{"2015":4.55,"2016":4.51,"2017":4.55,"2018":4.51,"2019":4.59,"2020":4.61,"2021":4.74,"2022":4.81},"EGY":{"2015":4.19,"2016":4.36,"2017":3.97,"2018":4.17,"2019":4.15,"2020":4.15,"2021":4.37,"2022":4.28},"IRN":{"2015":4.69,"2016":4.81,"2017":4.69,"2018":4.51,"2019":4.55,"2020":4.67,"2021":4.41,"2022":4.79},"TUR":{"2015":5.33,"2016":5.55,"2017":5.43,"2018":5.37,"2019":5.37,"2020":4.95,"2021":4.72,"2022":4.61},"POL":{"2015":5.79,"2016":5.84,"2017":5.97,"2018":6.12,"2019":6.18,"2020":6.19,"2021":6.17,"2022":6.14},"ESP":{"2015":6.33,"2016":6.36,"2017":6.4,"2018":6.35,"2019":6.35,"2020":6.4,"2021":6.49,"2022":6.44},"UKR":{"2015":4.32,"2016":4.35,"2017":4.1,"2018":4.1,"2019":4.33,"2020":4.56,"2021":4.87,"2022":5.07},"PHL":{"2015":5.07,"2016":5.13,"2017":5.43,"2018":5.43,"2019":5.88,"2020":6.15,"2021":6.11,"2022":6.11},"VNM":{"2015":5.07,"2016":5.06,"2017":5.07,"2018":5.1,"2019":5.18,"2020":5.35,"2021":5.35,"2022":5.36},"IDN":{"2015":5.4,"2016":5.31,"2017":5.26,"2018":5.09,"2019":5.19,"2020":5.28,"2021":5.24,"2022":5.24},"THA":{"2015":6.46,"2016":6.47,"2017":6.42,"2018":6.07,"2019":6.01,"2020":5.99,"2021":5.89,"2022":5.98}},"poverty":{"IND":{"2000":60.0,"2005":50.0,"2010":42.0,"2015":35.0,"2019":22.0,"2021":18.0},"CHN":{"2000":30.0,"2005":18.0,"2010":10.0,"2015":4.0,"2019":1.5,"2021":0.8},"BGD":{"2000":63.0,"2005":56.0,"2010":48.0,"2015":40.0,"2019":27.0,"2021":22.0},"NGA":{"2000":62.0,"2005":58.0,"2010":56.0,"2015":55.0,"2018":58.0,"2021":60.0},"ETH":{"2000":75.0,"2005":70.0,"2010":65.0,"2015":60.0,"2019":52.0,"2021":48.0},"KEN":{"2000":45.0,"2005":38.0,"2010":33.0,"2015":30.0,"2019":25.0,"2021":22.0},"ZAF":{"2000":45.0,"2005":40.0,"2010":38.0,"2015":35.0,"2019":33.0,"2021":35.0},"BRA":{"2000":22.0,"2005":18.0,"2010":12.0,"2015":8.0,"2019":7.0,"2021":10.0},"MEX":{"2000":18.0,"2005":12.0,"2010":9.0,"2015":7.0,"2019":6.5,"2021":7.5},"IDN":{"2000":45.0,"2005":38.0,"2010":30.0,"2015":22.0,"2019":18.0,"2021":17.0},"PAK":{"2000":48.0,"2005":42.0,"2010":38.0,"2015":35.0,"2019":30.0,"2021":32.0},"MOZ":{"2000":73.0,"2005":70.0,"2010":67.0,"2015":65.0,"2018":65.0,"2021":66.0},"MLI":{"2000":65.0,"2005":62.0,"2010":61.0,"2015":60.0,"2018":58.0,"2021":57.0},"COD":{"2000":76.0,"2005":74.0,"2010":72.0,"2015":70.0,"2018":69.0,"2021":69.0},"NER":{"2000":80.0,"2005":78.0,"2010":76.0,"2015":75.0,"2018":75.0,"2021":74.0},"RUS":{"2000":3.0,"2005":2.0,"2010":1.0,"2015":0.5,"2019":0.4,"2021":0.5},"POL":{"2000":3.0,"2005":1.0,"2010":0.5,"2015":0.3,"2019":0.2,"2021":0.2},"ARG":{"2000":10.0,"2005":7.0,"2010":5.0,"2015":4.0,"2019":6.0,"2021":8.0},"PER":{"2000":22.0,"2005":18.0,"2010":12.0,"2015":9.0,"2019":8.0,"2021":14.0},"COL":{"2000":20.0,"2005":17.0,"2010":14.0,"2015":12.0,"2019":10.0,"2021":16.0}},"homicide":{"HND":{"2000":50.0,"2005":46.0,"2010":82.0,"2015":60.0,"2017":42.8,"2019":37.6,"2021":38.6},"SLV":{"2000":37.0,"2005":55.0,"2010":65.7,"2015":64.2,"2017":60.8,"2019":36.0,"2021":17.6},"JAM":{"2000":33.0,"2005":58.0,"2010":52.0,"2015":43.2,"2017":55.7,"2019":47.1,"2021":49.4},"VEN":{"2000":33.0,"2005":37.0,"2010":45.0,"2015":57.2,"2017":56.8,"2019":60.3,"2021":40.4},"COL":{"2000":66.0,"2005":43.0,"2010":33.0,"2015":26.5,"2017":24.4,"2019":25.4,"2021":27.9},"BRA":{"2000":23.0,"2005":25.0,"2010":22.0,"2015":26.7,"2017":30.8,"2019":19.3,"2021":22.4},"MEX":{"2000":11.0,"2005":9.0,"2010":22.0,"2015":16.4,"2017":20.6,"2019":27.9,"2021":28.2},"ZAF":{"2000":50.0,"2005":40.0,"2010":30.0,"2015":34.3,"2017":35.9,"2019":36.4,"2021":41.1},"USA":{"2000":5.5,"2005":5.7,"2010":4.8,"2015":4.9,"2017":5.3,"2019":5.0,"2021":6.8},"RUS":{"2000":22.0,"2005":18.0,"2010":12.0,"2015":11.3,"2017":8.1,"2019":7.3,"2021":7.0},"GBR":{"2000":2.0,"2005":1.8,"2010":1.1,"2015":0.99,"2017":1.2,"2019":1.1,"2021":1.1},"DEU":{"2000":1.0,"2005":0.9,"2010":0.9,"2015":0.85,"2017":1.0,"2019":0.9,"2021":0.8},"JPN":{"2000":0.6,"2005":0.5,"2010":0.4,"2015":0.28,"2017":0.2,"2019":0.2,"2021":0.2},"NGA":{"2000":9.0,"2005":9.5,"2010":9.8,"2015":9.85,"2017":9.8,"2019":9.3,"2021":9.0},"IND":{"2000":4.5,"2005":3.8,"2010":3.5,"2015":3.2,"2017":3.0,"2019":2.9,"2021":2.8},"CHN":{"2000":1.2,"2005":1.0,"2010":0.8,"2015":0.74,"2017":0.7,"2019":0.6,"2021":0.5}},"fertility":{"NGA":{"2000":6.5,"2005":6.3,"2010":6.0,"2015":5.53,"2019":5.3,"2021":5.2},"NER":{"2000":8.0,"2005":7.7,"2010":7.5,"2015":7.38,"2019":6.9,"2021":6.7},"MLI":{"2000":7.0,"2005":6.7,"2010":6.4,"2015":6.06,"2019":5.8,"2021":5.7},"TCD":{"2000":7.0,"2005":6.7,"2010":6.4,"2015":5.74,"2019":5.5,"2021":5.4},"IND":{"2000":3.3,"2005":2.9,"2010":2.5,"2015":2.3,"2019":2.1,"2021":2.0},"CHN":{"2000":1.8,"2005":1.7,"2010":1.6,"2015":1.66,"2019":1.7,"2021":1.2},"PAK":{"2000":4.3,"2005":3.9,"2010":3.7,"2015":3.55,"2019":3.4,"2021":3.3},"BRA":{"2000":2.4,"2005":2.0,"2010":1.8,"2015":1.75,"2019":1.7,"2021":1.65},"USA":{"2000":2.06,"2005":2.05,"2010":1.93,"2015":1.84,"2019":1.72,"2021":1.66},"DEU":{"2000":1.36,"2005":1.34,"2010":1.39,"2015":1.5,"2019":1.54,"2021":1.58},"JPN":{"2000":1.36,"2005":1.26,"2010":1.39,"2015":1.45,"2019":1.36,"2021":1.3},"KOR":{"2000":1.47,"2005":1.22,"2010":1.23,"2015":1.24,"2019":0.92,"2021":0.81},"RUS":{"2000":1.2,"2005":1.3,"2010":1.57,"2015":1.78,"2019":1.5,"2021":1.5},"ESP":{"2000":1.22,"2005":1.33,"2010":1.38,"2015":1.33,"2019":1.23,"2021":1.19},"ETH":{"2000":6.5,"2005":5.9,"2010":5.1,"2015":4.32,"2019":4.0,"2021":3.9},"IDN":{"2000":2.6,"2005":2.5,"2010":2.4,"2015":2.36,"2019":2.3,"2021":2.2},"MEX":{"2000":2.8,"2005":2.5,"2010":2.35,"2015":2.27,"2019":2.1,"2021":2.05},"AFG":{"2000":7.5,"2005":6.9,"2010":5.9,"2015":4.87,"2019":4.5,"2021":4.4}},"pop_growth":{"NGA":{"2000":2.5,"2005":2.6,"2010":2.7,"2015":2.64,"2019":2.5,"2021":2.5},"ETH":{"2000":2.8,"2005":2.9,"2010":2.7,"2015":2.54,"2019":2.5,"2021":2.5},"IND":{"2000":1.8,"2005":1.7,"2010":1.4,"2015":1.18,"2019":1.0,"2021":0.9},"CHN":{"2000":0.8,"2005":0.7,"2010":0.6,"2015":0.52,"2019":0.4,"2021":0.1},"DEU":{"2000":0.2,"2005":0.0,"2010":-0.1,"2015":0.22,"2019":0.2,"2021":-0.1},"JPN":{"2000":0.2,"2005":0.0,"2010":0.0,"2015":-0.12,"2019":-0.3,"2021":-0.5},"KOR":{"2000":0.8,"2005":0.5,"2010":0.5,"2015":0.38,"2019":0.2,"2021":0.1},"USA":{"2000":1.1,"2005":0.9,"2010":0.8,"2015":0.73,"2019":0.6,"2021":0.4},"BRA":{"2000":1.5,"2005":1.3,"2010":1.0,"2015":0.85,"2019":0.7,"2021":0.7},"RUS":{"2000":-0.3,"2005":0.0,"2010":0.0,"2015":0.19,"2019":0.0,"2021":-0.5},"ZAF":{"2000":1.5,"2005":1.3,"2010":1.5,"2015":1.33,"2019":1.4,"2021":1.3},"ARG":{"2000":1.2,"2005":1.1,"2010":1.0,"2015":1.05,"2019":0.9,"2021":0.9},"MEX":{"2000":1.5,"2005":1.4,"2010":1.3,"2015":1.19,"2019":1.1,"2021":1.1},"EGY":{"2000":2.0,"2005":2.0,"2010":2.1,"2015":2.22,"2019":2.0,"2021":1.9},"IDN":{"2000":1.5,"2005":1.4,"2010":1.3,"2015":1.16,"2019":1.1,"2021":1.0},"POL":{"2000":0.0,"2005":-0.1,"2010":0.1,"2015":-0.05,"2019":-0.2,"2021":-0.9},"TUR":{"2000":1.6,"2005":1.3,"2010":1.5,"2015":1.68,"2019":1.4,"2021":1.2}}},"tsYears":["2000","2005","2010","2015","2016","2017","2018","2019","2020","2021","2022"]};
+const INDICATORS = DATA.indicators;
+const COUNTRIES  = DATA.countries;
+const HEX_LAYOUT = DATA.hexLayout;
+const TS         = DATA.timeseries;
+const TS_YEARS   = DATA.tsYears.map(Number);
+
+// ════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════
+let currentIndicator  = "child_mortality";
+let selectedCountry   = null;
+let highlightedRegion = null;   // ← single source of truth
+let currentMode       = "2d";
+let timeActive        = false;
+let currentYearIdx    = TS_YEARS.indexOf(2015);
+let playing           = false;
+let playTimer         = null;
+let selected3D        = null;
+
+// ════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════
+function getVal(iso, indicator, year) {
+  if (year && TS[indicator]?.[iso]?.[year] !== undefined)
+    return TS[indicator][iso][year];
+  return COUNTRIES[iso]?.[indicator];
+}
+
+function getColorScale(key) {
+  const cfg = INDICATORS[key];
+  const interps = {
+    RdYlGn: cfg.reverse ? t => d3.interpolateRdYlGn(1-t) : d3.interpolateRdYlGn,
+    PuRd:   d3.interpolatePuRd,
+    OrRd:   d3.interpolateOrRd,
+    BrBG:   d3.interpolateBrBG,
+    YlOrRd: d3.interpolateYlOrRd,
+  };
+  return d3.scaleSequential().domain(cfg.domain)
+    .interpolator(interps[cfg.colorScheme] || d3.interpolateViridis);
+}
+
+function getLuma(hex) {
+  const c = d3.color(hex); if (!c) return 0;
+  return 0.299*c.r + 0.587*c.g + 0.114*c.b;
+}
+
+function currentYear() { return timeActive ? TS_YEARS[currentYearIdx] : null; }
+
+// Expose globally so editor code can call them
+window.getVal = getVal;
+window.getColorScale = getColorScale;
+window.getLuma = getLuma;
+window.currentYear = currentYear;
+
+const REGION_COLORS = {
+  "Europe":"#6c8ebf","Eurasia":"#8b7fc7","North America":"#d4a76a",
+  "Central America":"#c9a84c","Caribbean":"#b89a3e","South America":"#7fb685",
+  "East Asia":"#d47a7a","Southeast Asia":"#cc6e8f","South Asia":"#d49a6a",
+  "Central Asia":"#a68bc7","Middle East":"#c4956e","North Africa":"#b5a864",
+  "West Africa":"#8aba7a","East Africa":"#6db889","Central Africa":"#5aad80",
+  "Southern Africa":"#4a9f75","Oceania":"#5aa0c4",
+};
+
+// ════════════════════════════════════════════════════════
+//  HEX GEOMETRY
+// ════════════════════════════════════════════════════════
+const hexR = 22, hexW = hexR*2, hexH = Math.sqrt(3)*hexR;
+
+function hexCorners(r) {
+  return Array.from({length:6}, (_,i) => {
+    const a = Math.PI/180*(60*i-30);
+    return [r*Math.cos(a), r*Math.sin(a)];
+  });
+}
+
+function hexCenter(col, row) {
+  return [col*hexW*0.75+hexR+40, row*hexH+(col%2===1?hexH/2:0)+hexR+20];
+}
+
+// ════════════════════════════════════════════════════════
+//  INDICATOR BUTTONS
+// ════════════════════════════════════════════════════════
+const controlsDiv = d3.select("#controls");
+Object.entries(INDICATORS).forEach(([key, cfg]) => {
+  controlsDiv.append("button")
+    .attr("class", "btn" + (key===currentIndicator?" active":""))
+    .attr("data-key", key).text(cfg.label)
+    .on("click", function() {
+      currentIndicator = key;
+      d3.selectAll("[data-key]").classed("active", false);
+      d3.select(this).classed("active", true);
+      updateMap(); updateLegend();
+      if (selectedCountry) updateDetail(selectedCountry);
+      if (currentMode==="3d") draw3D();
+    });
+});
+
+// ════════════════════════════════════════════════════════
+//  MODE
+// ════════════════════════════════════════════════════════
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById("btn-2d").classList.toggle("active", mode==="2d");
+  document.getElementById("btn-3d").classList.toggle("active", mode==="3d");
+  document.getElementById("mode-badge").textContent = mode==="2d" ? "2D · Color" : "3D · Pillars";
+  const ma = document.getElementById("map-area");
+  if (mode==="3d") { ma.classList.add("mode-3d"); resizeCanvas(); draw3D(); }
+  else             { ma.classList.remove("mode-3d"); updateMap(); }
+}
+
+// ════════════════════════════════════════════════════════
+//  TIME SLIDER
+// ════════════════════════════════════════════════════════
+function toggleTime() {
+  timeActive = !timeActive;
+  document.getElementById("time-bar").classList.toggle("visible", timeActive);
+  document.getElementById("btn-time").classList.toggle("active", timeActive);
+  if (!timeActive && playing) stopPlay();
+  updateMap(); updateLegend();
+  if (currentMode==="3d") draw3D();
+}
+
+const yearSlider = document.getElementById("year-slider");
+const yearDisplay = document.getElementById("year-display");
+yearSlider.max = TS_YEARS.length - 1;
+yearSlider.value = Math.max(0, currentYearIdx);
+
+yearSlider.addEventListener("input", function() {
+  currentYearIdx = +this.value;
+  yearDisplay.textContent = TS_YEARS[currentYearIdx];
+  if (playing) stopPlay();
+  updateMap(); if (currentMode==="3d") draw3D();
+  if (selectedCountry) updateDetail(selectedCountry);
+});
+
+function togglePlay() {
+  if (playing) { stopPlay(); return; }
+  playing = true;
+  document.getElementById("play-btn").textContent = "⏸ Pause";
+  if (currentYearIdx >= TS_YEARS.length-1) currentYearIdx = 0;
+  playTimer = setInterval(() => {
+    currentYearIdx++;
+    yearSlider.value = currentYearIdx;
+    yearDisplay.textContent = TS_YEARS[currentYearIdx];
+    updateMap(); if (currentMode==="3d") draw3D();
+    if (selectedCountry) updateDetail(selectedCountry);
+    if (currentYearIdx >= TS_YEARS.length-1) stopPlay();
+  }, 850);
+}
+
+function stopPlay() {
+  playing = false;
+  if (playTimer) { clearInterval(playTimer); playTimer = null; }
+  document.getElementById("play-btn").textContent = "▶ Play";
+}
+
+// ════════════════════════════════════════════════════════
+//  LEGEND
+// ════════════════════════════════════════════════════════
+function updateLegend() {
+  const cfg = INDICATORS[currentIndicator];
+  const bar = d3.select("#legend-bar").html("");
+  bar.append("span").attr("class","legend-title").text(cfg.label);
+  const scale = getColorScale(currentIndicator);
+  const can = document.createElement("canvas"); can.width=180; can.height=7;
+  const cx = can.getContext("2d");
+  for (let i=0; i<180; i++) {
+    cx.fillStyle = scale(cfg.domain[0]+(cfg.domain[1]-cfg.domain[0])*(i/180));
+    cx.fillRect(i,0,1,7);
+  }
+  const wrap = bar.append("div");
+  wrap.append("img").attr("src",can.toDataURL()).attr("class","legend-gradient");
+  const lbl = wrap.append("div").attr("class","legend-labels");
+  lbl.append("span").text(cfg.domain[0]+" "+cfg.unit);
+  lbl.append("span").text(cfg.domain[1]+" "+cfg.unit);
+  if (timeActive) bar.append("span").attr("class","legend-note").text("⏱ time-series active");
+}
+updateLegend();
+
+// ════════════════════════════════════════════════════════
+//  REGION FILTER  ← fixed: single handler, CSS classes, works in 2D + 3D
+// ════════════════════════════════════════════════════════
+const regions = [...new Set(Object.values(COUNTRIES).map(c=>c.region))].sort();
+
+d3.select("#region-legend").selectAll("div.region-item")
+  .data(regions)       // ← regions array IS the D3 datum, so `d` = region string
+  .join("div")
+    .attr("class","region-item")
+    .each(function(r) {
+      d3.select(this)
+        .append("div").attr("class","region-dot")
+        .style("background", REGION_COLORS[r]||"#666");
+      d3.select(this).append("span").text(r);
+    })
+    .on("click", function(event, r) {       // `r` is the datum — the region name string
+      if (highlightedRegion === r) {
+        highlightedRegion = null;
+      } else {
+        highlightedRegion = r;
+      }
+      // Update CSS on all region pills
+      d3.selectAll(".region-item")
+        .classed("active-region", d => d === highlightedRegion)
+        .classed("dimmed",        d => highlightedRegion !== null && d !== highlightedRegion);
+      // Apply to map
+      applyRegionFilter();
+    });
+
+// ── applies opacity in 2D (SVG) and triggers redraw in 3D
+function applyRegionFilter() {
+  // 2D: set opacity on each .hex-group via the ISO datum
+  svg.selectAll(".hex-group")
+    .transition().duration(220)
+    .style("opacity", function(d) {
+      if (!highlightedRegion) return 1;
+      const c = COUNTRIES[d.iso];
+      return (c && c.region === highlightedRegion) ? 1 : 0.1;
+    });
+  // 3D: just redraw — draw3D reads highlightedRegion directly
+  if (currentMode === "3d") draw3D();
+}
+
+// ════════════════════════════════════════════════════════
+//  BUILD 2D SVG MAP
+// ════════════════════════════════════════════════════════
+const mapAreaEl = d3.select("#map-area");
+const maxCol = Math.max(...HEX_LAYOUT.map(h=>h.col));
+const maxRow = Math.max(...HEX_LAYOUT.map(h=>h.row));
+const svgW = (maxCol+1)*hexW*0.75+hexR*2+80;
+const svgH = (maxRow+1)*hexH+hexH+40;
+
+const svg = mapAreaEl.append("svg")
+  .attr("viewBox", `0 0 ${svgW} ${svgH}`)
+  .attr("preserveAspectRatio","xMidYMid meet")
+  .style("width","100%").style("height","100%");
+
+// Background click → deselect
+svg.append("rect").attr("width",svgW).attr("height",svgH)
+  .attr("fill","transparent")
+  .on("click", deselectCountry);
+
+const hexGroups = svg.selectAll(".hex-group")
+  .data(HEX_LAYOUT).join("g").attr("class","hex-group")
+  .attr("transform", d => { const [cx,cy]=hexCenter(d.col,d.row); return `translate(${cx},${cy})`; });
+
+hexGroups.append("polygon")
+  .attr("class","hex-path")
+  .attr("points", hexCorners(hexR-1).map(p=>p.join(",")).join(" "))
+  .on("mouseover", (ev,d) => showTooltip(ev, d.iso))
+  .on("mousemove", moveTooltip)
+  .on("mouseout",  hideTooltip)
+  .on("click", function(ev, d) {
+    ev.stopPropagation();
+    if (selectedCountry === d.iso) { deselectCountry(); return; }
+    selectedCountry = d.iso;
+    svg.selectAll(".hex-path").classed("selected", false);
+    d3.select(this).classed("selected", true);
+    updateDetail(d.iso);
+  });
+
+hexGroups.append("text").attr("class","hex-label").attr("y",3).text(d=>d.iso);
+
+function deselectCountry() {
+  selectedCountry = null; selected3D = null;
+  svg.selectAll(".hex-path").classed("selected", false);
+  d3.select("#detail-panel").html(
+    '<div class="detail-empty">Click a hexagon<br>to explore details<br><br><span style="color:#252535">Click again or press Esc<br>to deselect</span></div>'
+  );
+  if (currentMode==="3d") draw3D();
+}
+
+// Expose so editor snippets can call it
+window.deselectCountry = deselectCountry;
+
+// ════════════════════════════════════════════════════════
+//  UPDATE 2D COLORS
+// ════════════════════════════════════════════════════════
+function updateMap() {
+  const scale = getColorScale(currentIndicator);
+  const yr = currentYear();
+
+  svg.selectAll(".hex-path")
+    .transition().duration(480).ease(d3.easeCubicInOut)
+    .attr("fill", d => {
+      const val = getVal(d.iso, currentIndicator, yr);
+      return val !== undefined ? scale(val) : "#1e2035";
+    });
+
+  svg.selectAll(".hex-label").each(function(d) {
+    const val = getVal(d.iso, currentIndicator, yr);
+    const bg  = val !== undefined ? getColorScale(currentIndicator)(val) : "#1e2035";
+    d3.select(this).attr("class","hex-label"+(getLuma(bg)>130?" dark":""));
+  });
+}
+window.updateMap = updateMap;
+updateMap();
+
+// ════════════════════════════════════════════════════════
+//  TOOLTIP
+// ════════════════════════════════════════════════════════
+const tooltip = d3.select("#tooltip");
+
+function showTooltip(ev, iso) {
+  const c = COUNTRIES[iso]; if (!c) return;
+  const yr = currentYear();
+  let h = `<div class="tt-name">${c.name}</div><div class="tt-region">${c.region} · ${c.income} income</div>`;
+  Object.entries(INDICATORS).forEach(([key,cfg]) => {
+    const val = getVal(iso, key, yr);
+    const pct = val !== undefined
+      ? Math.min(100, Math.max(0, ((val-cfg.domain[0])/(cfg.domain[1]-cfg.domain[0]))*100)) : 0;
+    const col = val !== undefined ? getColorScale(key)(val) : "#333";
+    h += `<div class="tt-row${key===currentIndicator?" tt-active":""}">
+      <span class="tt-label">${cfg.label}</span>
+      <span class="tt-mini">
+        <span class="tt-value">${val !== undefined ? val.toFixed(1) : "—"}</span>
+        <span class="tt-bar-bg"><span class="tt-bar" style="width:${pct}%;background:${col}"></span></span>
+      </span></div>`;
+  });
+  if (yr) h += `<div style="margin-top:5px;font-size:9px;color:#383a52">Year: ${yr}</div>`;
+  tooltip.html(h).classed("visible", true);
+  moveTooltip(ev);
+}
+
+function moveTooltip(ev) {
+  const n=tooltip.node(), w=n.offsetWidth, ht=n.offsetHeight;
+  let x=ev.clientX+14, y=ev.clientY-8;
+  if (x+w > window.innerWidth-8)  x = ev.clientX-w-14;
+  if (y+ht > window.innerHeight-8) y = window.innerHeight-ht-8;
+  if (y < 8) y = 8;
+  tooltip.style("left",x+"px").style("top",y+"px");
+}
+
+function hideTooltip() { tooltip.classed("visible",false); }
+
+// ════════════════════════════════════════════════════════
+//  DETAIL PANEL
+// ════════════════════════════════════════════════════════
+function updateDetail(iso) {
+  const c = COUNTRIES[iso]; if (!c) return;
+  const yr = currentYear();
+  const allISOs = Object.keys(COUNTRIES);
+
+  let h = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+    <h3>${c.name}</h3>
+    <button class="deselect-btn" onclick="deselectCountry()">✕</button>
+  </div>
+  <div class="dp-region">${c.region} · ${c.income} income · ${yr||2015}</div>`;
+
+  Object.entries(INDICATORS).forEach(([key,cfg]) => {
+    const val   = getVal(iso, key, yr);
+    const pct   = val !== undefined
+      ? Math.min(100, Math.max(0,((val-cfg.domain[0])/(cfg.domain[1]-cfg.domain[0]))*100)) : 0;
+    const scale = getColorScale(key);
+    const color = val !== undefined ? scale(val) : "#333";
+
+    const sorted = allISOs.map(k=>[k, getVal(k,key,yr)]).filter(([,v])=>v!==undefined)
+      .sort((a,b) => key==="happiness" ? b[1]-a[1] : a[1]-b[1]);
+    const rank = sorted.findIndex(([k])=>k===iso)+1;
+
+    // Sparkline
+    let spark = "";
+    if (TS[key]?.[iso]) {
+      const td = Object.entries(TS[key][iso]).sort((a,b)=>+a[0]-+b[0]);
+      const vs = td.map(([,v])=>v);
+      const mn=Math.min(...vs), mx=Math.max(...vs), rng=mx-mn||1;
+      const pts = td.map(([,v],i) =>
+        `${(i/(td.length-1||1))*76},${14-((v-mn)/rng)*12}`).join(" ");
+      const curIdx = td.findIndex(([y])=>+y===(yr||2015));
+      const dotX = curIdx>=0 ? (curIdx/(td.length-1||1))*76 : null;
+      const dotY = curIdx>=0 ? 14-((td[curIdx][1]-mn)/rng)*12 : null;
+      spark = `<svg class="ts-sparkline" width="76" height="16">
+        <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" opacity=".8"/>
+        ${dotX!==null ? `<circle cx="${dotX}" cy="${dotY}" r="2.5" fill="${color}" stroke="#13151e" stroke-width="1"/>` : ""}
+      </svg>`;
+    }
+
+    h += `<div class="dp-row">
+      <div class="dp-ilabel"><span>${cfg.label}</span><span>${val!==undefined?val.toFixed(2):"—"} ${cfg.unit}</span></div>
+      <div class="dp-bar-bg"><div class="dp-bar" style="width:${pct}%;background:${color}"></div></div>
+      ${rank ? `<span class="rank-badge">#${rank} of ${sorted.length}</span>` : ""}
+      ${spark}
+    </div>`;
+  });
+
+  h += `<div class="why-box">
+    <h4>Why hex tiles?</h4>
+    <p>Uniform hexagons give Russia and Rwanda identical visual weight — area bias eliminated per Nusrat & Kobourov 2016.</p>
+  </div>`;
+
+  d3.select("#detail-panel").html(h);
+}
+window.updateDetail = updateDetail;
+
+// ════════════════════════════════════════════════════════
+//  3D PILLAR MODE
+// ════════════════════════════════════════════════════════
+let canvas3d, ctx3d;
+let cam = { rx:0.55, ry:0.3, zoom:1.0 };
+let dragStart=null, camStart=null;
+const PILLAR_SCALE = 120;
+let last3DPts = {};
+
+function resizeCanvas() {
+  const ma = document.getElementById("map-area");
+  const c  = document.getElementById("canvas3d");
+  c.width  = ma.clientWidth;
+  c.height = ma.clientHeight;
+}
+
+function project3D(x,y,z) {
+  const cy=Math.cos(cam.ry), sy=Math.sin(cam.ry);
+  const x1=x*cy-z*sy, z1=x*sy+z*cy;
+  const cx=Math.cos(cam.rx), sx=Math.sin(cam.rx);
+  const y1=y*cx-z1*sx, z2=y*sx+z1*cx;
+  const fov=580*cam.zoom, d=800;
+  const sc = fov/(d+z2);
+  return [canvas3d.width/2+x1*sc, canvas3d.height/2+y1*sc, sc, z2];
+}
+
+function draw3D() {
+  if (!canvas3d) { canvas3d=document.getElementById("canvas3d"); ctx3d=canvas3d.getContext("2d"); }
+  const W=canvas3d.width, H=canvas3d.height;
+  ctx3d.clearRect(0,0,W,H);
+  const g=ctx3d.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)/2);
+  g.addColorStop(0,"#16192a"); g.addColorStop(1,"#090b10");
+  ctx3d.fillStyle=g; ctx3d.fillRect(0,0,W,H);
+
+  const scale = getColorScale(currentIndicator);
+  const cfg   = INDICATORS[currentIndicator];
+  const yr    = currentYear();
+  const cx0   = maxCol/2, rz0 = maxRow/2;
+  const sp    = hexR*2.1;
+
+  const hexes3D = HEX_LAYOUT.map(h => {
+    const val = getVal(h.iso, currentIndicator, yr);
+    const norm = val!==undefined ? Math.max(0,(val-cfg.domain[0])/(cfg.domain[1]-cfg.domain[0])) : 0;
+    return {
+      ...h,
+      x: (h.col-cx0)*sp*0.75,
+      z: (h.row-rz0)*sp*0.9+(h.col%2===1?sp*0.45:0),
+      pillarH: norm*PILLAR_SCALE,
+      color:   val!==undefined ? scale(val) : "#1e2035",
+      val,
+      c: COUNTRIES[h.iso],
+    };
+  });
+
+  // Painter's sort: back-to-front
+  hexes3D.sort((a,b) => {
+    const cy=Math.cos(cam.ry),sy=Math.sin(cam.ry),cx=Math.cos(cam.rx),sx=Math.sin(cam.rx);
+    const depth = h => { const z1=h.x*sy+h.z*cy; return h.pillarH/2*sx+z1*cx; };
+    return depth(b)-depth(a);
+  });
+
+  function hPts(cx,cz,r) {
+    return Array.from({length:6},(_,i)=>{const a=Math.PI/3*i;return[cx+r*Math.cos(a),cz+r*Math.sin(a)];});
+  }
+
+  const HR = hexR*0.8;
+  last3DPts = {};
+
+  hexes3D.forEach(h => {
+    const topY=-h.pillarH, botY=0;
+    const isSel = h.iso===selectedCountry;
+    const isVis = !highlightedRegion || (h.c && h.c.region===highlightedRegion);
+
+    ctx3d.globalAlpha = isVis ? 1 : 0.06;
+
+    const tPts = hPts(h.x,h.z,HR).map(([px,pz])=>project3D(px,topY,pz));
+    const bPts = hPts(h.x,h.z,HR).map(([px,pz])=>project3D(px,botY,pz));
+
+    // Side faces
+    for (let i=0;i<6;i++) {
+      const ni=(i+1)%6;
+      const bc = d3.color(h.color)||d3.color("#444");
+      const sh = i<3 ? 0.48 : 0.3;
+      ctx3d.beginPath();
+      ctx3d.moveTo(tPts[i][0],tPts[i][1]);
+      ctx3d.lineTo(tPts[ni][0],tPts[ni][1]);
+      ctx3d.lineTo(bPts[ni][0],bPts[ni][1]);
+      ctx3d.lineTo(bPts[i][0],bPts[i][1]);
+      ctx3d.closePath();
+      ctx3d.fillStyle=`rgb(${Math.round(bc.r*sh)},${Math.round(bc.g*sh)},${Math.round(bc.b*sh)})`;
+      ctx3d.fill();
+      ctx3d.strokeStyle = isSel?"rgba(255,215,0,.7)":"rgba(8,10,18,.7)";
+      ctx3d.lineWidth = isSel?1.2:0.5;
+      ctx3d.stroke();
+    }
+
+    // Top face
+    ctx3d.beginPath();
+    tPts.forEach(([px,py],i)=>i===0?ctx3d.moveTo(px,py):ctx3d.lineTo(px,py));
+    ctx3d.closePath();
+    ctx3d.fillStyle = h.color;
+    ctx3d.fill();
+    ctx3d.strokeStyle = isSel?"rgba(255,215,0,.95)":"rgba(255,255,255,.07)";
+    ctx3d.lineWidth = isSel?2:0.6;
+    ctx3d.stroke();
+
+    // Label
+    const [lx,ly] = project3D(h.x, topY-1, h.z);
+    const sc = tPts[0][2];
+    if (sc > 0.28 && isVis) {
+      ctx3d.globalAlpha = Math.min(1,(sc-0.28)*3.5);
+      ctx3d.font=`bold ${Math.round(6*sc)}px Inter,sans-serif`;
+      ctx3d.textAlign="center"; ctx3d.textBaseline="middle";
+      ctx3d.fillStyle = getLuma(h.color)>130?"#111":"#fff";
+      ctx3d.fillText(h.iso, lx, ly);
+    }
+
+    last3DPts[h.iso] = tPts;
+    ctx3d.globalAlpha = 1;
+  });
+}
+window.draw3D = draw3D;
+
+// ── 3D INTERACTION ──
+function init3D() {
+  const c = document.getElementById("canvas3d");
+  canvas3d = c; ctx3d = c.getContext("2d");
+
+  c.addEventListener("mousedown", e => { dragStart={x:e.clientX,y:e.clientY}; camStart={rx:cam.rx,ry:cam.ry}; });
+  c.addEventListener("mousemove", e => {
+    if (dragStart) {
+      cam.ry = camStart.ry+(e.clientX-dragStart.x)*0.007;
+      cam.rx = Math.max(0.1,Math.min(1.4,camStart.rx+(e.clientY-dragStart.y)*0.007));
+      draw3D();
+    } else { handle3DHover(e); }
+  });
+  c.addEventListener("mouseup", e => {
+    if (dragStart && Math.abs(e.clientX-dragStart.x)<4 && Math.abs(e.clientY-dragStart.y)<4) handle3DClick(e);
+    dragStart=null;
+  });
+  c.addEventListener("mouseleave", ()=>{ dragStart=null; hideTooltip(); });
+  c.addEventListener("wheel", e=>{ e.preventDefault(); cam.zoom=Math.max(.4,Math.min(3,cam.zoom*(e.deltaY>0?.92:1.09))); draw3D(); },{passive:false});
+}
+
+function pointInPoly(px,py,pts) {
+  let inside=false;
+  for (let i=0,j=pts.length-1;i<pts.length;j=i++) {
+    const xi=pts[i][0],yi=pts[i][1],xj=pts[j][0],yj=pts[j][1];
+    if (((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+
+function handle3DHover(e) {
+  const r=canvas3d.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+  const hit = Object.entries(last3DPts).find(([,pts])=>pointInPoly(mx,my,pts));
+  if (hit) { showTooltip(e,hit[0]); canvas3d.style.cursor="pointer"; }
+  else     { hideTooltip(); canvas3d.style.cursor="grab"; }
+}
+
+function handle3DClick(e) {
+  const r=canvas3d.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+  const hit = Object.entries(last3DPts).find(([,pts])=>pointInPoly(mx,my,pts));
+  if (hit) {
+    if (selectedCountry===hit[0]) { deselectCountry(); return; }
+    selectedCountry=hit[0]; selected3D=hit[0];
+    svg.selectAll(".hex-path").classed("selected",false);
+    svg.select(`.hex-path[data-iso="${hit[0]}"]`).classed("selected",true);
+    updateDetail(hit[0]); draw3D();
+  } else { deselectCountry(); }
+}
+
+// ════════════════════════════════════════════════════════
+//  KEYBOARD
+// ════════════════════════════════════════════════════════
+document.addEventListener("keydown", e => {
+  if (document.getElementById("editor-overlay").classList.contains("open")) return;
+  const keys=Object.keys(INDICATORS), idx=keys.indexOf(currentIndicator);
+  if (e.key==="ArrowRight" && idx<keys.length-1) {
+    currentIndicator=keys[idx+1];
+    d3.selectAll("[data-key]").classed("active",false);
+    d3.select(`[data-key="${currentIndicator}"]`).classed("active",true);
+    updateMap(); updateLegend(); if(selectedCountry) updateDetail(selectedCountry); if(currentMode==="3d") draw3D();
+  } else if (e.key==="ArrowLeft" && idx>0) {
+    currentIndicator=keys[idx-1];
+    d3.selectAll("[data-key]").classed("active",false);
+    d3.select(`[data-key="${currentIndicator}"]`).classed("active",true);
+    updateMap(); updateLegend(); if(selectedCountry) updateDetail(selectedCountry); if(currentMode==="3d") draw3D();
+  } else if (e.key==="Escape") {
+    deselectCountry();
+  }
+});
+
+// ════════════════════════════════════════════════════════
+//  LIVE EDITOR
+// ════════════════════════════════════════════════════════
+let monacoEditor = null;
+let monacoLoaded = false;
+
+const EDITOR_DEFAULT = `// Live D3 editor — your code runs inside the visualization context.
+// You have access to: d3, DATA, INDICATORS, COUNTRIES, HEX_LAYOUT, TS,
+//   currentIndicator, highlightedRegion, selectedCountry, cam (3D camera),
+//   updateMap(), draw3D(), updateDetail(), getColorScale(), getVal(), getLuma()
+//
+// Example: change the color interpolator for the active indicator
+// ────────────────────────────────────────────────────────────
+
+// Override the hex fill colors with a custom interpolator
+const scale = d3.scaleSequential()
+  .domain(INDICATORS[currentIndicator].domain)
+  .interpolator(d3.interpolatePlasma);   // try: Viridis, Inferno, Magma, Turbo, Cividis
+
+d3.selectAll(".hex-path")
+  .transition().duration(600).ease(d3.easeCubicInOut)
+  .attr("fill", d => {
+    const val = COUNTRIES[d.iso]?.[currentIndicator];
+    return val !== undefined ? scale(val) : "#1e2035";
+  });
+
+// Redraw 3D too if we're in 3D mode
+if (window.currentMode === "3d") draw3D();
+`;
+
+const SNIPPETS = {
+  colorscale: `// Switch color interpolator on the 2D map
+const newScale = d3.scaleSequential()
+  .domain(INDICATORS[currentIndicator].domain)
+  .interpolator(d3.interpolateTurbo);   // options: Plasma, Viridis, Inferno, Cividis, Cool, Warm
+
+d3.selectAll(".hex-path")
+  .transition().duration(600)
+  .attr("fill", d => {
+    const val = COUNTRIES[d.iso]?.[currentIndicator];
+    return val !== undefined ? newScale(val) : "#1e2035";
+  });`,
+
+  threshold: `// Highlight countries above a threshold with a gold outline
+const THRESHOLD = 30;  // change this value
+
+d3.selectAll(".hex-path")
+  .attr("stroke", d => {
+    const val = COUNTRIES[d.iso]?.[currentIndicator];
+    return (val !== undefined && val > THRESHOLD) ? "#ffd700" : "#1a1d28";
+  })
+  .attr("stroke-width", d => {
+    const val = COUNTRIES[d.iso]?.[currentIndicator];
+    return (val !== undefined && val > THRESHOLD) ? 3 : 1.2;
+  });`,
+
+  sizeencode: `// Scale hex SIZE by indicator value (non-contiguous cartogram style)
+const cfg = INDICATORS[currentIndicator];
+const sizeScale = d3.scaleLinear().domain(cfg.domain).range([6, 20]);
+
+d3.selectAll(".hex-path")
+  .transition().duration(700)
+  .attr("points", d => {
+    const val = COUNTRIES[d.iso]?.[currentIndicator];
+    const r = val !== undefined ? sizeScale(val) : 8;
+    return [0,1,2,3,4,5].map(i => {
+      const a = Math.PI/180*(60*i-30);
+      return [r*Math.cos(a), r*Math.sin(a)].join(",");
+    }).join(" ");
+  });
+// Reset: call updateMap() to restore normal hex size`,
+
+  pillarbase: `// Change 3D base platform color + ambient light tint
+// This patches the draw3D color computation — run then switch to 3D mode
+
+const origDraw = window.draw3D;
+window.draw3D = function() {
+  // Call original, then overlay custom base
+  origDraw();
+  // The hex colors already render — this shows the concept of overriding
+  console.log("Custom draw3D active — switch to 3D to see pillars");
+};
+draw3D();`,
+
+  labelall: `// Show full country names on hover labels (change tooltip header font)
+d3.selectAll(".hex-label")
+  .text(d => {
+    const c = COUNTRIES[d.iso];
+    // Show 3-letter ISO or full name if fits
+    return c ? d.iso : "?";
+  })
+  .attr("font-size", "7px");
+
+// Show name in tooltip - already done. This demonstrates text manipulation.
+console.log("Labels are ISO codes by default; full names appear in tooltips on hover.");`,
+
+  reset: `// Reset colors, sizes, strokes back to defaults
+updateMap();
+d3.selectAll(".hex-path")
+  .attr("stroke", null)
+  .attr("stroke-width", null)
+  .attr("points", d => {
+    const r = 21;  // hexR - 1
+    return [0,1,2,3,4,5].map(i => {
+      const a = Math.PI/180*(60*i-30);
+      return [r*Math.cos(a), r*Math.sin(a)].join(",");
+    }).join(" ");
+  });
+d3.selectAll(".hex-label").attr("font-size", null).text(d => d.iso);
+if (window.currentMode === "3d") draw3D();
+console.log("Reset complete.");`
+};
+
+function openEditor() {
+  document.getElementById("editor-overlay").classList.add("open");
+  document.getElementById("btn-editor").classList.add("active");
+  if (!monacoLoaded) loadMonaco();
+}
+
+function closeEditor() {
+  document.getElementById("editor-overlay").classList.remove("open");
+  document.getElementById("btn-editor").classList.remove("active");
+}
+
+function loadMonaco() {
+  monacoLoaded = true;
+  const script = document.createElement("script");
+  script.src = "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js";
+  script.onload = () => {
+    require.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs" } });
+    require(["vs/editor/editor.main"], () => {
+      monacoEditor = monaco.editor.create(document.getElementById("monaco-container"), {
+        value: EDITOR_DEFAULT,
+        language: "javascript",
+        theme: "vs-dark",
+        fontSize: 12,
+        fontFamily: "'JetBrains Mono', monospace",
+        minimap: { enabled: false },
+        lineNumbers: "on",
+        scrollBeyondLastLine: false,
+        automaticLayout: true,
+        wordWrap: "on",
+        tabSize: 2,
+        suggestOnTriggerCharacters: true,
+      });
+      // Ctrl+Enter to run
+      monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, runEditorCode);
+      editorLog("info", "Monaco editor ready — Ctrl+Enter to run");
+      editorLog("info", "Globals: d3, DATA, INDICATORS, COUNTRIES, HEX_LAYOUT, TS, cam, currentIndicator, updateMap, draw3D, getColorScale, getVal, getLuma");
+    });
+  };
+  document.head.appendChild(script);
+}
+
+function loadSnippet(name) {
+  if (!monacoEditor) { editorLog("err","Editor not ready yet"); return; }
+  monacoEditor.setValue(SNIPPETS[name]);
+  editorLog("info", `Loaded snippet: ${name}`);
+}
+
+function runEditorCode() {
+  const code = monacoEditor ? monacoEditor.getValue() : "";
+  if (!code.trim()) return;
+  editorLog("info", "Running...");
+  try {
+    // Expose all globals into a function context
+    const fn = new Function(
+      "d3","DATA","INDICATORS","COUNTRIES","HEX_LAYOUT","TS","TS_YEARS",
+      "currentIndicator","highlightedRegion","selectedCountry","cam",
+      "updateMap","draw3D","updateDetail","deselectCountry",
+      "getColorScale","getVal","getLuma","currentYear","svg",
+      "console",
+      code
+    );
+    const patchedConsole = {
+      log:   (...a) => editorLog("ok",  a.map(String).join(" ")),
+      warn:  (...a) => editorLog("info",a.map(String).join(" ")),
+      error: (...a) => editorLog("err", a.map(String).join(" ")),
+    };
+    fn(
+      d3,DATA,INDICATORS,COUNTRIES,HEX_LAYOUT,TS,TS_YEARS,
+      currentIndicator,highlightedRegion,selectedCountry,cam,
+      updateMap,draw3D,updateDetail,deselectCountry,
+      getColorScale,getVal,getLuma,currentYear,svg,
+      patchedConsole
+    );
+    editorLog("ok", "✓ Executed successfully");
+  } catch(e) {
+    editorLog("err", "✗ " + e.message);
+  }
+}
+
+function editorLog(type, msg) {
+  const log = document.getElementById("editor-log");
+  const line = document.createElement("div");
+  line.className = "log-line log-" + type;
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════
+init3D();
+window.currentMode = currentMode;
+window.addEventListener("resize", () => { if (currentMode==="3d") { resizeCanvas(); draw3D(); } });
+</script>
+</body>
+</html>

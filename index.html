@@ -1,29 +1,123 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>AIV 2026 - Group 10</title>
+  <meta charset="utf-8">
+  <title>AIV 2026 — Group 10</title>
   <style>
-    body { background: #1a1a2e; color: #fff; font-family: sans-serif; 
-           display: flex; flex-direction: column; align-items: center; 
-           justify-content: center; height: 100vh; gap: 30px; }
-    h1 { font-size: 28px; margin-bottom: 10px; }
-    .cards { display: flex; gap: 20px; }
-    a { color: #fff; font-size: 18px; padding: 24px 32px; 
-        background: #0f3460;
-        border: 2px solid #e94560; border-radius: 10px; 
-        text-decoration: none; text-align: center; }
-    a:hover { background: #e94560; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0a0a1a;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .bg {
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: 
+        radial-gradient(ellipse at 20% 50%, rgba(233,69,96,0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(15,52,96,0.4) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 80%, rgba(74,144,226,0.1) 0%, transparent 50%);
+      z-index: 0;
+    }
+    .content { position: relative; z-index: 1; text-align: center; padding: 40px 20px; }
+    .badge {
+      display: inline-block;
+      background: rgba(233,69,96,0.15);
+      border: 1px solid rgba(233,69,96,0.4);
+      color: #e94560; font-size: 12px; font-weight: 600;
+      letter-spacing: 2px; text-transform: uppercase;
+      padding: 6px 16px; border-radius: 20px; margin-bottom: 24px;
+    }
+    h1 {
+      font-size: 48px; font-weight: 700; line-height: 1.1; margin-bottom: 12px;
+      background: linear-gradient(135deg, #fff 0%, #aaa 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .subtitle { font-size: 16px; color: rgba(255,255,255,0.5); margin-bottom: 60px; font-weight: 300; }
+    .cards { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
+    .card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px; padding: 36px 32px; width: 280px;
+      text-decoration: none; color: #fff;
+      transition: all 0.3s ease; position: relative; overflow: hidden;
+    }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 0;
+      width: 100%; height: 2px;
+      background: linear-gradient(90deg, #e94560, #4a90e2);
+      opacity: 0; transition: opacity 0.3s ease;
+    }
+    .card:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(233,69,96,0.4);
+      transform: translateY(-6px);
+      box-shadow: 0 20px 40px rgba(233,69,96,0.15);
+    }
+    .card:hover::before { opacity: 1; }
+    .card-icon { font-size: 40px; margin-bottom: 16px; display: block; }
+    .card-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    .card-desc { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.6; margin-bottom: 20px; }
+    .arrow {
+      position: absolute; bottom: 36px; right: 32px;
+      font-size: 18px; opacity: 0.3; transition: all 0.3s ease;
+    }
+    .card:hover .arrow { opacity: 1; transform: translate(4px, -4px); }
+    .footer { margin-top: 60px; font-size: 12px; color: rgba(255,255,255,0.2); letter-spacing: 1px; }
+    .dots { position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; overflow: hidden; }
+    .dot {
+      position: absolute; width: 2px; height: 2px;
+      background: rgba(255,255,255,0.3); border-radius: 50%;
+      animation: float linear infinite;
+    }
+    @keyframes float {
+      0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+      10% { opacity: 1; } 90% { opacity: 1; }
+      100% { transform: translateY(-100px) rotate(720deg); opacity: 0; }
+    }
   </style>
 </head>
 <body>
-  <h1>AIV 2026 — Group 10</h1>
-  <div class="cards">
-    <a href="melika.html">
-      🗺 Life Expectancy<br>Dashboard<br><small>Melika</small>
-    </a>
-    <a href="teammate.html">
-      📊 Hex Cartogram<br>Dashboard<br><small>Teammate</small>
-    </a>
+  <div class="bg"></div>
+  <div class="dots" id="dots"></div>
+  <div class="content">
+    <div class="badge">Advanced Information Visualization 2026</div>
+    <h1>Group 10<br>Census Data</h1>
+    <p class="subtitle">Interactive data visualizations built with D3.js</p>
+    <div class="cards">
+      <a class="card" href="melika.html">
+        <span class="card-icon">🗺</span>
+        <div class="card-title">Choropleth Map</div>
+        <div class="card-desc">Animated choropleth map showing life expectancy across countries from 1950 to 2023, with line chart and data table.</div>
+        <span class="arrow">↗</span>
+      </a>
+      <a class="card" href="teammate.html">
+        <span class="card-icon">📊</span>
+        <div class="card-title">Hex Cartogram</div>
+        <div class="card-desc">Custom hexagonal cartogram visualization providing an alternative geographic representation of data.</div>
+        <span class="arrow">↗</span>
+      </a>
+    </div>
+    <div class="footer">AIV 2026 · Group 10 · Task 3</div>
   </div>
+  <script>
+    const dots = document.getElementById('dots')
+    for (let i = 0; i < 30; i++) {
+      const dot = document.createElement('div')
+      dot.className = 'dot'
+      dot.style.left = Math.random() * 100 + '%'
+      dot.style.animationDuration = (Math.random() * 15 + 10) + 's'
+      dot.style.animationDelay = (Math.random() * 15) + 's'
+      dot.style.width = dot.style.height = (Math.random() * 3 + 1) + 'px'
+      dots.appendChild(dot)
+    }
+  </script>
 </body>
 </html>
